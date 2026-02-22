@@ -22,13 +22,16 @@ export class GameRoom extends DurableObject {
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
 		const { playerId } = ws.deserializeAttachment();
 
+		const textMessage = typeof message === 'string' ? message : new TextDecoder().decode(message);
+
 		const allPlayers = this.ctx.getWebSockets();
+
 		allPlayers.forEach((player) => {
 			player.send(
 				JSON.stringify({
 					action: 'BROADCAST',
 					sender: playerId,
-					message: `Played a card!`
+					message: textMessage
 				})
 			);
 		});
