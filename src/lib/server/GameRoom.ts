@@ -10,26 +10,32 @@ export class GameRoom extends DurableObject {
 		const webSocketPair = new WebSocketPair();
 		const [client, server] = Object.values(webSocketPair);
 
+		const playerId = crypto.randomUUID().substring(0, 4).toUpperCase();
+
+		server.serializeAttachment({ playerId });
+
 		this.ctx.acceptWebSocket(server);
 
-		return new Response(null, {
-			status: 101,
-			webSocket: client
-		});
+		return new Response(null, { status: 101, webSocket: client });
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		console.log('Received from player:', message);
+		const { playerId } = ws.deserializeAttachment();
 
-		ws.send(
-			JSON.stringify({
-				action: 'SYNC',
-				message: 'Hello from the Edge! You are connected to Renúncia.'
-			})
-		);
+		const allPlayers = this.ctx.getWebSockets();
+		allPlayers.forEach((player) => {
+			player.send(
+				JSON.stringify({
+					action: 'BROADCAST',
+					sender: playerId,
+					message: `Played a card!`
+				})
+			);
+		});
 	}
 
 	async webSocketClose(ws: WebSocket) {
-		console.log('A player disconnected.');
+		const { playerId } = ws.deserializeAttachment();
+		console.log(`Player ${playerId} disconnected.`);
 	}
 }
