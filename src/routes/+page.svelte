@@ -1,8 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-
 	let socket: WebSocket | null = null;
-	let messages: string[] = [];
 	let isConnected = false;
 
 	let myHand: any[] = [];
@@ -11,6 +8,8 @@
 	let myPlayerId: string = '';
 	let isMyTurn = false;
 	let gameStarted = false;
+	let team1Points = 0;
+	let team2Points = 0;
 
 	function connectToTable() {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -30,12 +29,13 @@
 				myHand = data.myHand;
 				table = data.table;
 				activePlayerId = data.activePlayerId;
-
 				myPlayerId = data.myPlayerId;
-
 				isMyTurn = activePlayerId === myPlayerId;
-			} else if (data.action === 'ERROR') {
-				alert(`Server: ${data.message}`);
+				team1Points = data.team1Points;
+				team2Points = data.team2Points;
+			} else if (data.action === 'GAME_OVER') {
+				alert(`Game Over! Team 1: ${data.t1} pts | Team 2: ${data.t2} pts`);
+				gameStarted = false;
 			}
 		};
 
@@ -71,6 +71,17 @@
 			</button>
 		{:else}
 			<div class="space-y-6">
+				<div class="flex justify-between rounded-lg border border-neutral-700 bg-neutral-900 p-4">
+					<div class="text-center">
+						<span class="text-xs tracking-widest text-neutral-400 uppercase">Team 1 (P1 & P3)</span>
+						<div class="text-2xl font-bold text-amber-500">{team1Points} pts</div>
+					</div>
+					<div class="text-center">
+						<span class="text-xs tracking-widest text-neutral-400 uppercase">Team 2 (P2 & P4)</span>
+						<div class="text-2xl font-bold text-emerald-500">{team2Points} pts</div>
+					</div>
+				</div>
+
 				<div
 					class="rounded border bg-neutral-900 p-3 text-center {isMyTurn
 						? 'border-amber-500 text-amber-400'
