@@ -8,10 +8,12 @@ export interface Card {
 	rank: Rank;
 	value: number;
 }
+
 export interface Player {
 	id: string;
 	isBot: boolean;
 }
+
 export interface PlayedCard {
 	playerId: string;
 	card: Card;
@@ -87,6 +89,24 @@ export class GameRoom extends DurableObject {
 			const myHand = this.hands[playerId];
 
 			if (cardIndex >= 0 && cardIndex < myHand.length) {
+				const attemptedCard = myHand[cardIndex];
+				const validMoves = this.getValidMoves(playerId);
+
+				const isValid = validMoves.some(
+					(c) => c.suit === attemptedCard.suit && c.rank === attemptedCard.rank
+				);
+
+				if (!isValid) {
+					const leadSuit = this.currentTrick[0].card.suit;
+					ws.send(
+						JSON.stringify({
+							action: 'ERROR',
+							message: `Renúncia! You must play a card of ${leadSuit}.`
+						})
+					);
+					return;
+				}
+
 				const playedCard = myHand.splice(cardIndex, 1)[0];
 				this.currentTrick.push({ playerId, card: playedCard });
 				this.advanceTurn();
@@ -179,13 +199,35 @@ export class GameRoom extends DurableObject {
 			if (botHand.length === 0) return;
 
 			setTimeout(() => {
-				const randomCardIndex = Math.floor(Math.random() * botHand.length);
-				const playedCard = botHand.splice(randomCardIndex, 1)[0];
+				const validMoves = this.getValidMoves(activePlayer.id);
+				const randomValidCard = validMoves[Math.floor(Math.random() * validMoves.length)];
+
+				const cardIndexInHand = botHand.findIndex(
+					(c) => c.suit === randomValidCard.suit && c.rank === randomValidCard.rank
+				);
+				const playedCard = botHand.splice(cardIndexInHand, 1)[0];
 
 				this.currentTrick.push({ playerId: activePlayer.id, card: playedCard });
 				this.advanceTurn();
 			}, 1000);
 		}
+	}
+
+	private getValidMoves(playerId: string): Card[] {
+		const myHand = this.hands[playerId];
+
+		if (this.currentTrick.length === 0) {
+			return myHand;
+		}
+
+		const leadSuit = this.currentTrick[0].card.suit;
+		const cardsOfLeadSuit = myHand.filter((card) => card.suit === leadSuit);
+
+		if (cardsOfLeadSuit.length > 0) {
+			return cardsOfLeadSuit;
+		}
+
+		return myHand;
 	}
 
 	private broadcastGameState() {
@@ -213,7 +255,6 @@ export class GameRoom extends DurableObject {
 	}
 
 	private generateDeck(): Card[] {
-		/* ... unchanged ... */
 		const suits: Suit[] = ['copas', 'espadas', 'ouros', 'paus'];
 		const ranks: { rank: Rank; value: number }[] = [
 			{ rank: 'A', value: 11 },
@@ -234,7 +275,6 @@ export class GameRoom extends DurableObject {
 	}
 
 	private shuffleDeck(deck: Card[]) {
-		/* ... unchanged ... */
 		for (let i = deck.length - 1; i > 0; i--) {
 			const j = Math.floor(Math.random() * (i + 1));
 			[deck[i], deck[j]] = [deck[j], deck[i]];

@@ -33,6 +33,8 @@
 				isMyTurn = activePlayerId === myPlayerId;
 				team1Points = data.team1Points;
 				team2Points = data.team2Points;
+			} else if (data.action === 'ERROR') {
+				alert(data.message);
 			} else if (data.action === 'GAME_OVER') {
 				alert(`Game Over! Team 1: ${data.t1} pts | Team 2: ${data.t2} pts`);
 				gameStarted = false;
