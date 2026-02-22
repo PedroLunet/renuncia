@@ -9,9 +9,17 @@ export interface Card {
 	value: number;
 }
 
+export interface Player {
+	id: string;
+	isBot: boolean;
+}
+
 export class GameRoom extends DurableObject {
-	players: string[] = [];
+	players: Player[] = [];
 	deck: Card[] = [];
+	hands: Record<string, Card[]> = {};
+	trumpCard: Card | null = null;
+	gameStarted: boolean = false;
 
 	async fetch(request: Request): Promise<Response> {
 		const upgradeHeader = request.headers.get('Upgrade');
@@ -27,8 +35,8 @@ export class GameRoom extends DurableObject {
 
 		this.ctx.acceptWebSocket(server);
 
-		if (!this.players.includes(playerId)) {
-			this.players.push(playerId);
+		if (!this.gameStarted && this.players.length < 4) {
+			this.players.push({ id: playerId, isBot: false });
 		}
 
 		return new Response(null, { status: 101, webSocket: client });
@@ -38,37 +46,56 @@ export class GameRoom extends DurableObject {
 		const { playerId } = ws.deserializeAttachment();
 		const textMessage = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
-		if (textMessage === 'START_GAME') {
+		if (textMessage === 'START_GAME' && !this.gameStarted) {
+			let botCounter = 1;
+			while (this.players.length < 4) {
+				this.players.push({ id: `BOT_${botCounter}`, isBot: true });
+				botCounter++;
+			}
+
 			this.deck = this.generateDeck();
 			this.shuffleDeck(this.deck);
 
-			const sampleHand = this.deck.slice(0, 10);
-			this.broadcast({
-				action: 'GAME_STARTED',
-				message: `Deck generated and shuffled! Trump is ${this.deck[0].rank} of ${this.deck[0].suit}`,
-				hand: sampleHand
+			this.trumpCard = this.deck[this.deck.length - 1];
+
+			for (let i = 0; i < 4; i++) {
+				const pId = this.players[i].id;
+				this.hands[pId] = this.deck.slice(i * 10, i * 10 + 10);
+			}
+
+			this.gameStarted = true;
+
+			const allSockets = this.ctx.getWebSockets();
+			allSockets.forEach((socket) => {
+				const { playerId: socketPlayerId } = socket.deserializeAttachment();
+
+				const myHand = this.hands[socketPlayerId];
+
+				socket.send(
+					JSON.stringify({
+						action: 'GAME_STARTED',
+						message: `Game on! Trump is ${this.trumpCard?.rank} of ${this.trumpCard?.suit}`,
+						trump: this.trumpCard,
+						players: this.players,
+						hand: myHand
+					})
+				);
 			});
 			return;
 		}
 
-		this.broadcast({
-			action: 'BROADCAST',
-			sender: playerId,
-			message: textMessage
+		const allSockets = this.ctx.getWebSockets();
+		allSockets.forEach((socket) => {
+			socket.send(JSON.stringify({ action: 'BROADCAST', sender: playerId, message: textMessage }));
 		});
 	}
 
 	async webSocketClose(ws: WebSocket) {
 		const { playerId } = ws.deserializeAttachment();
-		this.players = this.players.filter((id) => id !== playerId);
-		console.log(`Player ${playerId} disconnected. Players left: ${this.players.length}`);
-	}
-
-	private broadcast(data: any) {
-		const allSockets = this.ctx.getWebSockets();
-		allSockets.forEach((socket) => {
-			socket.send(JSON.stringify(data));
-		});
+		if (!this.gameStarted) {
+			this.players = this.players.filter((p) => p.id !== playerId);
+		}
+		console.log(`Player ${playerId} disconnected.`);
 	}
 
 	private generateDeck(): Card[] {
