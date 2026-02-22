@@ -21,7 +21,10 @@
 
 			if (data.action === 'GAME_STARTED') {
 				messages = [...messages, `🎲 ${data.message}`];
-				console.log('My dealt hand:', data.hand);
+				console.log('--- GAME STARTED ---');
+				console.log('All Players:', data.players);
+				console.log('Trump Card (Trunfo):', data.trump);
+				console.log('My Private Hand:', data.hand);
 			} else {
 				messages = [...messages, `👤 Player ${data.sender}: ${data.message}`];
 			}
