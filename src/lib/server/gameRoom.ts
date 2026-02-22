@@ -8,10 +8,13 @@ export interface Card {
 	rank: Rank;
 	value: number;
 }
-
 export interface Player {
 	id: string;
 	isBot: boolean;
+}
+export interface PlayedCard {
+	playerId: string;
+	card: Card;
 }
 
 export class GameRoom extends DurableObject {
@@ -21,18 +24,19 @@ export class GameRoom extends DurableObject {
 	trumpCard: Card | null = null;
 	gameStarted: boolean = false;
 
+	currentTurnIndex: number = 0;
+	currentTrick: PlayedCard[] = [];
+
 	async fetch(request: Request): Promise<Response> {
 		const upgradeHeader = request.headers.get('Upgrade');
-		if (!upgradeHeader || upgradeHeader !== 'websocket') {
+		if (!upgradeHeader || upgradeHeader !== 'websocket')
 			return new Response('Expected Upgrade: websocket', { status: 426 });
-		}
 
 		const webSocketPair = new WebSocketPair();
 		const [client, server] = Object.values(webSocketPair);
-
 		const playerId = crypto.randomUUID().substring(0, 4).toUpperCase();
-		server.serializeAttachment({ playerId });
 
+		server.serializeAttachment({ playerId });
 		this.ctx.acceptWebSocket(server);
 
 		if (!this.gameStarted && this.players.length < 4) {
@@ -55,47 +59,97 @@ export class GameRoom extends DurableObject {
 
 			this.deck = this.generateDeck();
 			this.shuffleDeck(this.deck);
-
 			this.trumpCard = this.deck[this.deck.length - 1];
 
 			for (let i = 0; i < 4; i++) {
-				const pId = this.players[i].id;
-				this.hands[pId] = this.deck.slice(i * 10, i * 10 + 10);
+				this.hands[this.players[i].id] = this.deck.slice(i * 10, i * 10 + 10);
 			}
 
 			this.gameStarted = true;
+			this.currentTurnIndex = 0;
+			this.currentTrick = [];
 
-			const allSockets = this.ctx.getWebSockets();
-			allSockets.forEach((socket) => {
-				const { playerId: socketPlayerId } = socket.deserializeAttachment();
+			this.broadcastGameState();
 
-				const myHand = this.hands[socketPlayerId];
-
-				socket.send(
-					JSON.stringify({
-						action: 'GAME_STARTED',
-						message: `Game on! Trump is ${this.trumpCard?.rank} of ${this.trumpCard?.suit}`,
-						trump: this.trumpCard,
-						players: this.players,
-						hand: myHand
-					})
-				);
-			});
+			this.processTurn();
 			return;
 		}
 
-		const allSockets = this.ctx.getWebSockets();
-		allSockets.forEach((socket) => {
-			socket.send(JSON.stringify({ action: 'BROADCAST', sender: playerId, message: textMessage }));
-		});
+		if (textMessage.startsWith('PLAY_CARD')) {
+			const activePlayer = this.players[this.currentTurnIndex];
+
+			if (activePlayer.id !== playerId) {
+				ws.send(JSON.stringify({ action: 'ERROR', message: 'Not your turn!' }));
+				return;
+			}
+
+			const cardIndex = parseInt(textMessage.split(':')[1]);
+			const myHand = this.hands[playerId];
+
+			if (cardIndex >= 0 && cardIndex < myHand.length) {
+				const playedCard = myHand.splice(cardIndex, 1)[0];
+				this.currentTrick.push({ playerId, card: playedCard });
+
+				this.advanceTurn();
+			}
+		}
 	}
 
 	async webSocketClose(ws: WebSocket) {
 		const { playerId } = ws.deserializeAttachment();
-		if (!this.gameStarted) {
-			this.players = this.players.filter((p) => p.id !== playerId);
+		if (!this.gameStarted) this.players = this.players.filter((p) => p.id !== playerId);
+	}
+
+	private advanceTurn() {
+		if (this.currentTrick.length === 4) {
+			this.broadcastGameState();
+
+			setTimeout(() => {
+				this.currentTrick = [];
+				this.currentTurnIndex = 0;
+				this.broadcastGameState();
+				this.processTurn();
+			}, 2000);
+			return;
 		}
-		console.log(`Player ${playerId} disconnected.`);
+
+		this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
+		this.broadcastGameState();
+		this.processTurn();
+	}
+
+	private processTurn() {
+		const activePlayer = this.players[this.currentTurnIndex];
+
+		if (activePlayer.isBot) {
+			const botHand = this.hands[activePlayer.id];
+			if (botHand.length === 0) return;
+
+			setTimeout(() => {
+				const randomCardIndex = Math.floor(Math.random() * botHand.length);
+				const playedCard = botHand.splice(randomCardIndex, 1)[0];
+
+				this.currentTrick.push({ playerId: activePlayer.id, card: playedCard });
+				this.advanceTurn();
+			}, 1000);
+		}
+	}
+
+	private broadcastGameState() {
+		const allSockets = this.ctx.getWebSockets();
+		allSockets.forEach((socket) => {
+			const { playerId } = socket.deserializeAttachment();
+			socket.send(
+				JSON.stringify({
+					action: 'GAME_STATE_UPDATE',
+					players: this.players,
+					activePlayerId: this.players[this.currentTurnIndex]?.id,
+					table: this.currentTrick,
+					myHand: this.hands[playerId] || [],
+					myPlayerId: playerId
+				})
+			);
+		});
 	}
 
 	private generateDeck(): Card[] {
@@ -112,13 +166,9 @@ export class GameRoom extends DurableObject {
 			{ rank: '3', value: 0 },
 			{ rank: '2', value: 0 }
 		];
-
 		const newDeck: Card[] = [];
-		for (const suit of suits) {
-			for (const { rank, value } of ranks) {
-				newDeck.push({ suit, rank, value });
-			}
-		}
+		for (const suit of suits)
+			for (const { rank, value } of ranks) newDeck.push({ suit, rank, value });
 		return newDeck;
 	}
 
