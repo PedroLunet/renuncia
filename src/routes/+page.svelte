@@ -18,7 +18,13 @@
 
 		socket.onmessage = (event) => {
 			const data = JSON.parse(event.data);
-			messages = [...messages, `👤 Player ${data.sender}: ${data.message}`];
+
+			if (data.action === 'GAME_STARTED') {
+				messages = [...messages, `🎲 ${data.message}`];
+				console.log('My dealt hand:', data.hand);
+			} else {
+				messages = [...messages, `👤 Player ${data.sender}: ${data.message}`];
+			}
 		};
 
 		socket.onclose = () => {
@@ -49,10 +55,10 @@
 				</button>
 			{:else}
 				<button
-					onclick={playTestCard}
+					onclick={() => socket?.send('START_GAME')}
 					class="w-full rounded-lg bg-emerald-600 py-3 font-semibold text-white transition-colors hover:bg-emerald-500"
 				>
-					Play a Card
+					Shuffle & Deal
 				</button>
 			{/if}
 		</div>
