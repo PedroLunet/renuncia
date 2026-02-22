@@ -27,6 +27,9 @@ export class GameRoom extends DurableObject {
 	currentTurnIndex: number = 0;
 	currentTrick: PlayedCard[] = [];
 
+	team1Points: number = 0;
+	team2Points: number = 0;
+
 	async fetch(request: Request): Promise<Response> {
 		const upgradeHeader = request.headers.get('Upgrade');
 		if (!upgradeHeader || upgradeHeader !== 'websocket')
@@ -68,20 +71,17 @@ export class GameRoom extends DurableObject {
 			this.gameStarted = true;
 			this.currentTurnIndex = 0;
 			this.currentTrick = [];
+			this.team1Points = 0;
+			this.team2Points = 0;
 
 			this.broadcastGameState();
-
 			this.processTurn();
 			return;
 		}
 
 		if (textMessage.startsWith('PLAY_CARD')) {
 			const activePlayer = this.players[this.currentTurnIndex];
-
-			if (activePlayer.id !== playerId) {
-				ws.send(JSON.stringify({ action: 'ERROR', message: 'Not your turn!' }));
-				return;
-			}
+			if (activePlayer.id !== playerId) return;
 
 			const cardIndex = parseInt(textMessage.split(':')[1]);
 			const myHand = this.hands[playerId];
@@ -89,7 +89,6 @@ export class GameRoom extends DurableObject {
 			if (cardIndex >= 0 && cardIndex < myHand.length) {
 				const playedCard = myHand.splice(cardIndex, 1)[0];
 				this.currentTrick.push({ playerId, card: playedCard });
-
 				this.advanceTurn();
 			}
 		}
@@ -105,8 +104,26 @@ export class GameRoom extends DurableObject {
 			this.broadcastGameState();
 
 			setTimeout(() => {
+				const winnerId = this.evaluateTrickWinner();
+				const winnerIndex = this.players.findIndex((p) => p.id === winnerId);
+
+				const trickPoints = this.currentTrick.reduce((sum, play) => sum + play.card.value, 0);
+
+				if (winnerIndex % 2 === 0) {
+					this.team1Points += trickPoints;
+				} else {
+					this.team2Points += trickPoints;
+				}
+
+				this.currentTurnIndex = winnerIndex;
 				this.currentTrick = [];
-				this.currentTurnIndex = 0;
+
+				if (this.hands[this.players[0].id].length === 0) {
+					this.gameStarted = false;
+					this.broadcast({ action: 'GAME_OVER', t1: this.team1Points, t2: this.team2Points });
+					return;
+				}
+
 				this.broadcastGameState();
 				this.processTurn();
 			}, 2000);
@@ -118,9 +135,45 @@ export class GameRoom extends DurableObject {
 		this.processTurn();
 	}
 
+	private evaluateTrickWinner(): string {
+		const leadSuit = this.currentTrick[0].card.suit;
+		const trumpSuit = this.trumpCard!.suit;
+
+		const rankPower: Record<Rank, number> = {
+			A: 10,
+			'7': 9,
+			K: 8,
+			J: 7,
+			Q: 6,
+			'6': 5,
+			'5': 4,
+			'4': 3,
+			'3': 2,
+			'2': 1
+		};
+
+		let winningPlay = this.currentTrick[0];
+		let maxPower = -1;
+
+		for (const play of this.currentTrick) {
+			let power = 0;
+			if (play.card.suit === trumpSuit) {
+				power = 1000 + rankPower[play.card.rank];
+			} else if (play.card.suit === leadSuit) {
+				power = 100 + rankPower[play.card.rank];
+			}
+
+			if (power > maxPower) {
+				maxPower = power;
+				winningPlay = play;
+			}
+		}
+
+		return winningPlay.playerId;
+	}
+
 	private processTurn() {
 		const activePlayer = this.players[this.currentTurnIndex];
-
 		if (activePlayer.isBot) {
 			const botHand = this.hands[activePlayer.id];
 			if (botHand.length === 0) return;
@@ -146,13 +199,21 @@ export class GameRoom extends DurableObject {
 					activePlayerId: this.players[this.currentTurnIndex]?.id,
 					table: this.currentTrick,
 					myHand: this.hands[playerId] || [],
-					myPlayerId: playerId
+					myPlayerId: playerId,
+					team1Points: this.team1Points,
+					team2Points: this.team2Points
 				})
 			);
 		});
 	}
 
+	private broadcast(data: any) {
+		const allSockets = this.ctx.getWebSockets();
+		allSockets.forEach((s) => s.send(JSON.stringify(data)));
+	}
+
 	private generateDeck(): Card[] {
+		/* ... unchanged ... */
 		const suits: Suit[] = ['copas', 'espadas', 'ouros', 'paus'];
 		const ranks: { rank: Rank; value: number }[] = [
 			{ rank: 'A', value: 11 },
@@ -173,6 +234,7 @@ export class GameRoom extends DurableObject {
 	}
 
 	private shuffleDeck(deck: Card[]) {
+		/* ... unchanged ... */
 		for (let i = deck.length - 1; i > 0; i--) {
 			const j = Math.floor(Math.random() * (i + 1));
 			[deck[i], deck[j]] = [deck[j], deck[i]];
