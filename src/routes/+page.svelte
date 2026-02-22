@@ -7,19 +7,18 @@
 
 	function connectToTable() {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
 		const wsUrl = `${protocol}//${window.location.host}/api/play`;
 
 		socket = new WebSocket(wsUrl);
 
 		socket.onopen = () => {
 			isConnected = true;
-			messages = [...messages, '🟢 Connected to Table 1!'];
+			messages = [...messages, '🟢 Connected to Table!'];
 		};
 
 		socket.onmessage = (event) => {
 			const data = JSON.parse(event.data);
-			messages = [...messages, `📩 Server says: ${data.message}`];
+			messages = [...messages, `👤 Player ${data.sender}: ${data.message}`];
 		};
 
 		socket.onclose = () => {
@@ -30,8 +29,7 @@
 
 	function playTestCard() {
 		if (socket && isConnected) {
-			socket.send('Player 1 played the Ace of Spades!');
-			messages = [...messages, '📤 You: Played Ace of Spades'];
+			socket.send('PLAY_CARD');
 		}
 	}
 </script>
