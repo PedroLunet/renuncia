@@ -235,11 +235,28 @@ export class GameRoom extends DurableObject {
 
 	async webSocketClose(ws: WebSocket) {
 		const { playerId } = ws.deserializeAttachment();
-		if (!this.gameStarted) {
-			this.players = this.players.filter((p) => p.id !== playerId);
-			await this.saveState();
-			this.ctx.waitUntil(this.reportToLobby());
+
+		const playerIndex = this.players.findIndex((p) => p.id === playerId);
+
+		if (playerIndex !== -1) {
+			if (this.gameStarted) {
+				this.players[playerIndex].isBot = true;
+
+				const humanCount = this.players.filter((p) => !p.isBot).length;
+				if (humanCount === 0) {
+					this.gameStarted = false;
+					this.players = [];
+				} else if (this.currentTurnIndex === playerIndex) {
+					this.processTurn();
+				}
+			} else {
+				this.players.splice(playerIndex, 1);
+			}
 		}
+
+		await this.saveState();
+		this.broadcastGameState();
+		this.ctx.waitUntil(this.reportToLobby());
 	}
 
 	private async advanceTurn() {
