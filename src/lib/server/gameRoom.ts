@@ -343,6 +343,7 @@ export class GameRoom extends DurableObject {
 				if (this.hands[this.players[0].id].length === 0) {
 					this.gameStarted = false;
 					let matchResult = '';
+
 					if (this.team1Points > 60) {
 						const pts = this.team1Points === 120 ? 4 : this.team1Points > 90 ? 2 : 1;
 						this.team1MatchPoints += pts;
@@ -353,6 +354,16 @@ export class GameRoom extends DurableObject {
 						matchResult = `Team 2 wins ${pts} match point(s)!`;
 					} else {
 						matchResult = 'Draw! 60 - 60.';
+					}
+
+					if (this.team1MatchPoints >= 4) {
+						matchResult += '\n\n🏆 TEAM 1 WINS THE ENTIRE MATCH! 🏆';
+						this.team1MatchPoints = 0;
+						this.team2MatchPoints = 0;
+					} else if (this.team2MatchPoints >= 4) {
+						matchResult += '\n\n🏆 TEAM 2 WINS THE ENTIRE MATCH! 🏆';
+						this.team1MatchPoints = 0;
+						this.team2MatchPoints = 0;
 					}
 
 					await this.saveState();
