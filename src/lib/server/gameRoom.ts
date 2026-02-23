@@ -20,7 +20,10 @@ export interface PlayedCard {
 export class GameRoom extends DurableObject {
 	env: any;
 	roomCode: string = '';
+
 	isPrivate: boolean = false;
+	ownerId: string | null = null;
+	pendingPlayers: string[] = [];
 
 	players: Player[] = [];
 	deck: Card[] = [];
@@ -44,6 +47,9 @@ export class GameRoom extends DurableObject {
 			const stored = await this.ctx.storage.get<any>('gameState');
 			if (stored) {
 				this.roomCode = stored.roomCode || '';
+				this.isPrivate = stored.isPrivate || false;
+				this.ownerId = stored.ownerId || null;
+				this.pendingPlayers = stored.pendingPlayers || [];
 				this.players = stored.players || [];
 				this.deck = stored.deck || [];
 				this.hands = stored.hands || {};
@@ -62,6 +68,9 @@ export class GameRoom extends DurableObject {
 	private async saveState() {
 		await this.ctx.storage.put('gameState', {
 			roomCode: this.roomCode,
+			isPrivate: this.isPrivate,
+			ownerId: this.ownerId,
+			pendingPlayers: this.pendingPlayers,
 			players: this.players,
 			deck: this.deck,
 			hands: this.hands,
@@ -78,14 +87,12 @@ export class GameRoom extends DurableObject {
 
 	private async reportToLobby() {
 		if (!this.roomCode || !this.env.LOBBY_MANAGER) return;
-
 		try {
 			const lobbyId = this.env.LOBBY_MANAGER.idFromName('GLOBAL_LOBBY_INSTANCE');
 			const lobbyStub = this.env.LOBBY_MANAGER.get(lobbyId);
-
 			const humanCount = this.players.filter((p) => !p.isBot).length;
 
-			if (humanCount === 0) {
+			if (humanCount === 0 && this.pendingPlayers.length === 0) {
 				await lobbyStub.fetch(`http://internal/lobby?code=${this.roomCode}`, { method: 'DELETE' });
 			} else {
 				await lobbyStub.fetch('http://internal/lobby', {
@@ -99,17 +106,28 @@ export class GameRoom extends DurableObject {
 				});
 			}
 		} catch (e) {
-			console.error('Failed to report to lobby:', e);
+			console.error(e);
 		}
+	}
+
+	private notifyOwner() {
+		if (!this.ownerId) return;
+		const sockets = this.ctx.getWebSockets();
+		sockets.forEach((ws) => {
+			if (ws.deserializeAttachment().playerId === this.ownerId) {
+				ws.send(JSON.stringify({ action: 'APPROVAL_REQUEST', requests: this.pendingPlayers }));
+			}
+		});
 	}
 
 	async fetch(request: Request): Promise<Response> {
 		const upgradeHeader = request.headers.get('Upgrade');
 		if (!upgradeHeader || upgradeHeader !== 'websocket')
-			return new Response('Expected Upgrade: websocket', { status: 426 });
+			return new Response('Expected WS', { status: 426 });
 
 		const url = new URL(request.url);
 		this.roomCode = url.pathname.split('/').pop() || 'UNKNOWN';
+		const isCreatingPrivate = url.searchParams.get('private') === 'true';
 
 		const webSocketPair = new WebSocketPair();
 		const [client, server] = Object.values(webSocketPair);
@@ -118,30 +136,29 @@ export class GameRoom extends DurableObject {
 		server.serializeAttachment({ playerId });
 		this.ctx.acceptWebSocket(server);
 
-		if (!this.gameStarted && this.players.length < 4) {
-			this.players.push({ id: playerId, isBot: false });
-			await this.saveState();
-
-			this.ctx.waitUntil(this.reportToLobby());
+		if (this.players.length === 0 && !this.gameStarted) {
+			this.isPrivate = isCreatingPrivate;
+			this.ownerId = playerId;
 		}
 
-		server.send(
-			JSON.stringify({
-				action: 'GAME_STATE_UPDATE',
-				gameStarted: this.gameStarted,
-				players: this.players,
-				activePlayerId: this.players[this.currentTurnIndex]?.id,
-				table: this.currentTrick,
-				myHand: this.hands[playerId] || [],
-				myPlayerId: playerId,
-				team1Points: this.team1Points,
-				team2Points: this.team2Points,
-				team1MatchPoints: this.team1MatchPoints,
-				team2MatchPoints: this.team2MatchPoints,
-				trumpCard: this.trumpCard
-			})
-		);
+		if (!this.gameStarted && this.players.length < 4) {
+			if (this.isPrivate && this.ownerId !== playerId) {
+				if (!this.pendingPlayers.includes(playerId)) {
+					this.pendingPlayers.push(playerId);
+					await this.saveState();
+				}
+				server.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
+				this.notifyOwner();
+			} else {
+				this.players.push({ id: playerId, isBot: false });
+				await this.saveState();
+				this.ctx.waitUntil(this.reportToLobby());
+			}
+		} else if (this.gameStarted) {
+			server.send(JSON.stringify({ action: 'ERROR', message: 'Game already in progress.' }));
+		}
 
+		this.broadcastGameState();
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
@@ -150,18 +167,71 @@ export class GameRoom extends DurableObject {
 			const { playerId } = ws.deserializeAttachment();
 			const textMessage = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
-			if (!this.players.find((p) => p.id === playerId)) {
-				this.players.push({ id: playerId, isBot: false });
+			if (textMessage.startsWith('ACCEPT_PLAYER:')) {
+				if (playerId !== this.ownerId) return;
+				const targetId = textMessage.split(':')[1];
+
+				this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
+				if (this.players.length < 4 && !this.gameStarted) {
+					this.players.push({ id: targetId, isBot: false });
+					await this.saveState();
+					this.ctx.waitUntil(this.reportToLobby());
+					this.broadcastGameState();
+					this.notifyOwner();
+				}
+				return;
+			}
+
+			if (textMessage.startsWith('DECLINE_PLAYER:')) {
+				if (playerId !== this.ownerId) return;
+				const targetId = textMessage.split(':')[1];
+
+				this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
+				const sockets = this.ctx.getWebSockets();
+				sockets.forEach((s) => {
+					if (s.deserializeAttachment().playerId === targetId) {
+						s.send(JSON.stringify({ action: 'REJECTED' }));
+					}
+				});
 				await this.saveState();
-				this.ctx.waitUntil(this.reportToLobby());
+				this.notifyOwner();
+				return;
+			}
+
+			if (!this.players.find((p) => p.id === playerId) && !this.pendingPlayers.includes(playerId)) {
+				if (this.isPrivate && this.ownerId !== playerId) {
+					this.pendingPlayers.push(playerId);
+					ws.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
+					this.notifyOwner();
+				} else {
+					this.players.push({ id: playerId, isBot: false });
+					await this.saveState();
+					this.ctx.waitUntil(this.reportToLobby());
+				}
 			}
 
 			if (textMessage === 'START_GAME' && !this.gameStarted) {
+				if (this.isPrivate && playerId !== this.ownerId) {
+					ws.send(
+						JSON.stringify({ action: 'ERROR', message: 'Only the host can start the game.' })
+					);
+					return;
+				}
+
 				let botCounter = 1;
 				while (this.players.length < 4) {
 					this.players.push({ id: `BOT_${botCounter}`, isBot: true });
 					botCounter++;
 				}
+
+				const sockets = this.ctx.getWebSockets();
+				this.pendingPlayers.forEach((targetId) => {
+					sockets.forEach((s) => {
+						if (s.deserializeAttachment().playerId === targetId)
+							s.send(JSON.stringify({ action: 'REJECTED' }));
+					});
+				});
+				this.pendingPlayers = [];
 
 				this.deck = this.generateDeck();
 				this.shuffleDeck(this.deck);
@@ -179,25 +249,16 @@ export class GameRoom extends DurableObject {
 
 				await this.saveState();
 				this.ctx.waitUntil(this.reportToLobby());
-
 				this.broadcastGameState();
 				this.processTurn();
 				return;
 			}
 
 			if (textMessage.startsWith('PLAY_CARD')) {
-				if (!this.gameStarted) {
-					ws.send(JSON.stringify({ action: 'ERROR', message: 'Game has not started!' }));
-					return;
-				}
-
+				if (!this.gameStarted) return;
 				if (this.currentTrick.length >= 4) return;
-
 				const activePlayer = this.players[this.currentTurnIndex];
-				if (!activePlayer || activePlayer.id !== playerId) {
-					ws.send(JSON.stringify({ action: 'ERROR', message: "Wait! It's not your turn." }));
-					return;
-				}
+				if (!activePlayer || activePlayer.id !== playerId) return;
 
 				const cardIndex = parseInt(textMessage.split(':')[1], 10);
 				const myHand = this.hands[playerId];
@@ -236,12 +297,13 @@ export class GameRoom extends DurableObject {
 	async webSocketClose(ws: WebSocket) {
 		const { playerId } = ws.deserializeAttachment();
 
-		const playerIndex = this.players.findIndex((p) => p.id === playerId);
+		this.pendingPlayers = this.pendingPlayers.filter((id) => id !== playerId);
+		this.notifyOwner();
 
+		const playerIndex = this.players.findIndex((p) => p.id === playerId);
 		if (playerIndex !== -1) {
 			if (this.gameStarted) {
 				this.players[playerIndex].isBot = true;
-
 				const humanCount = this.players.filter((p) => !p.isBot).length;
 				if (humanCount === 0) {
 					this.gameStarted = false;
@@ -251,6 +313,11 @@ export class GameRoom extends DurableObject {
 				}
 			} else {
 				this.players.splice(playerIndex, 1);
+			}
+
+			if (this.ownerId === playerId && this.players.length > 0) {
+				const nextHuman = this.players.find((p) => !p.isBot);
+				this.ownerId = nextHuman ? nextHuman.id : null;
 			}
 		}
 
@@ -262,25 +329,19 @@ export class GameRoom extends DurableObject {
 	private async advanceTurn() {
 		if (this.currentTrick.length === 4) {
 			this.broadcastGameState();
-
 			setTimeout(async () => {
 				const winnerId = this.evaluateTrickWinner();
 				const winnerIndex = this.players.findIndex((p) => p.id === winnerId);
-
 				const trickPoints = this.currentTrick.reduce((sum, play) => sum + play.card.value, 0);
 
-				if (winnerIndex % 2 === 0) {
-					this.team1Points += trickPoints;
-				} else {
-					this.team2Points += trickPoints;
-				}
+				if (winnerIndex % 2 === 0) this.team1Points += trickPoints;
+				else this.team2Points += trickPoints;
 
 				this.currentTurnIndex = winnerIndex;
 				this.currentTrick = [];
 
 				if (this.hands[this.players[0].id].length === 0) {
 					this.gameStarted = false;
-
 					let matchResult = '';
 					if (this.team1Points > 60) {
 						const pts = this.team1Points === 120 ? 4 : this.team1Points > 90 ? 2 : 1;
@@ -295,7 +356,7 @@ export class GameRoom extends DurableObject {
 					}
 
 					await this.saveState();
-					this.ctx.waitUntil(this.reportToLobby()); // Tell lobby game is back in waiting state
+					this.ctx.waitUntil(this.reportToLobby());
 					this.broadcast({
 						action: 'GAME_OVER',
 						t1: this.team1Points,
@@ -304,14 +365,12 @@ export class GameRoom extends DurableObject {
 					});
 					return;
 				}
-
 				await this.saveState();
 				this.broadcastGameState();
 				this.processTurn();
 			}, 2000);
 			return;
 		}
-
 		this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
 		await this.saveState();
 		this.broadcastGameState();
@@ -335,14 +394,10 @@ export class GameRoom extends DurableObject {
 		};
 		let winningPlay = this.currentTrick[0];
 		let maxPower = -1;
-
 		for (const play of this.currentTrick) {
 			let power = 0;
-			if (play.card.suit === trumpSuit) {
-				power = 1000 + rankPower[play.card.rank];
-			} else if (play.card.suit === leadSuit) {
-				power = 100 + rankPower[play.card.rank];
-			}
+			if (play.card.suit === trumpSuit) power = 1000 + rankPower[play.card.rank];
+			else if (play.card.suit === leadSuit) power = 100 + rankPower[play.card.rank];
 			if (power > maxPower) {
 				maxPower = power;
 				winningPlay = play;
@@ -356,7 +411,6 @@ export class GameRoom extends DurableObject {
 		if (activePlayer && activePlayer.isBot) {
 			const botHand = this.hands[activePlayer.id];
 			if (!botHand || botHand.length === 0) return;
-
 			setTimeout(async () => {
 				const validMoves = this.getValidMoves(activePlayer.id);
 				const randomValidCard = validMoves[Math.floor(Math.random() * validMoves.length)];
@@ -364,7 +418,6 @@ export class GameRoom extends DurableObject {
 					(c) => c.suit === randomValidCard.suit && c.rank === randomValidCard.rank
 				);
 				const playedCard = botHand.splice(cardIndexInHand, 1)[0];
-
 				this.currentTrick.push({ playerId: activePlayer.id, card: playedCard });
 				await this.saveState();
 				this.advanceTurn();
@@ -388,6 +441,7 @@ export class GameRoom extends DurableObject {
 				JSON.stringify({
 					action: 'GAME_STATE_UPDATE',
 					gameStarted: this.gameStarted,
+					ownerId: this.ownerId,
 					players: this.players,
 					activePlayerId: this.players[this.currentTurnIndex]?.id,
 					table: this.currentTrick,
