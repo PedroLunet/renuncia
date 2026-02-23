@@ -1,15 +1,19 @@
 <script lang="ts">
 	let socket: WebSocket | null = null;
-	let isConnected = false;
 
-	let myHand: any[] = [];
-	let table: any[] = [];
-	let activePlayerId: string = '';
-	let myPlayerId: string = '';
-	let isMyTurn = false;
-	let gameStarted = false;
-	let team1Points = 0;
-	let team2Points = 0;
+	let isConnected = $state(false);
+	let myHand: any[] = $state([]);
+	let table: any[] = $state([]);
+	let activePlayerId = $state('');
+	let myPlayerId = $state('');
+	let gameStarted = $state(false);
+	let team1Points = $state(0);
+	let team2Points = $state(0);
+	let errorMessage = $state('');
+
+	let isMyTurn = $derived(
+		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
+	);
 
 	function connectToTable() {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -30,11 +34,11 @@
 				table = data.table;
 				activePlayerId = data.activePlayerId;
 				myPlayerId = data.myPlayerId;
-				isMyTurn = activePlayerId === myPlayerId;
 				team1Points = data.team1Points;
 				team2Points = data.team2Points;
 			} else if (data.action === 'ERROR') {
-				alert(data.message);
+				errorMessage = data.message;
+				setTimeout(() => (errorMessage = ''), 3000);
 			} else if (data.action === 'GAME_OVER') {
 				alert(`Game Over! Team 1: ${data.t1} pts | Team 2: ${data.t2} pts`);
 				gameStarted = false;
@@ -46,9 +50,9 @@
 		};
 	}
 
-	function playTopCard() {
-		if (socket && isConnected && myHand.length > 0) {
-			socket.send('PLAY_CARD:0');
+	function playCard(index: number) {
+		if (socket && isConnected && isMyTurn) {
+			socket.send(`PLAY_CARD:${index}`);
 		}
 	}
 </script>
@@ -84,6 +88,14 @@
 					</div>
 				</div>
 
+				{#if errorMessage}
+					<div
+						class="animate-bounce rounded border border-red-500 bg-red-900/80 p-3 text-center font-bold text-red-200 shadow-lg"
+					>
+						⚠️ {errorMessage}
+					</div>
+				{/if}
+
 				<div
 					class="rounded border bg-neutral-900 p-3 text-center {isMyTurn
 						? 'border-amber-500 text-amber-400'
@@ -104,7 +116,12 @@
 							class="flex flex-col items-center rounded bg-white px-4 py-6 text-xl font-bold text-black shadow-lg"
 						>
 							<span>{playedCard.card.rank}</span>
-							<span class="text-sm">{playedCard.card.suit}</span>
+							<span class="text-sm">
+								{#if playedCard.card.suit === 'copas'}❤️
+								{:else if playedCard.card.suit === 'espadas'}♠️
+								{:else if playedCard.card.suit === 'ouros'}♦️
+								{:else}♣️{/if}
+							</span>
 							<span class="mt-2 text-[10px] text-gray-500">{playedCard.playerId}</span>
 						</div>
 					{/each}
@@ -117,24 +134,27 @@
 
 				<div>
 					<h3 class="mb-2 text-sm text-neutral-400">Your Hand ({myHand.length} cards)</h3>
-					<div class="flex flex-wrap gap-2">
-						{#each myHand as card}
-							<div class="rounded border border-neutral-600 bg-neutral-700 px-3 py-1 text-sm">
-								{card.rank} of {card.suit}
-							</div>
+					<div class="flex flex-wrap gap-3">
+						{#each myHand as card, index}
+							<button
+								onclick={() => playCard(index)}
+								disabled={!isMyTurn}
+								class="relative flex h-32 w-24 flex-col items-center justify-between rounded-xl border-2 bg-white p-2 text-black shadow-md transition-transform {isMyTurn
+									? 'cursor-pointer border-neutral-200 hover:-translate-y-4 hover:shadow-xl'
+									: 'cursor-not-allowed border-neutral-400 opacity-70'}"
+							>
+								<div class="self-start text-lg leading-none font-bold">{card.rank}</div>
+								<div class="text-3xl">
+									{#if card.suit === 'copas'}❤️
+									{:else if card.suit === 'espadas'}♠️
+									{:else if card.suit === 'ouros'}♦️
+									{:else}♣️{/if}
+								</div>
+								<div class="rotate-180 self-end text-lg leading-none font-bold">{card.rank}</div>
+							</button>
 						{/each}
 					</div>
 				</div>
-
-				<button
-					onclick={playTopCard}
-					disabled={!isMyTurn}
-					class="w-full rounded-lg py-3 font-semibold transition-colors {isMyTurn
-						? 'bg-amber-600 text-white hover:bg-amber-500'
-						: 'cursor-not-allowed bg-neutral-700 text-neutral-500'}"
-				>
-					Play Leftmost Card
-				</button>
 			</div>
 		{/if}
 	</div>

@@ -82,11 +82,15 @@ export class GameRoom extends DurableObject {
 		}
 
 		if (textMessage.startsWith('PLAY_CARD')) {
+			if (!this.gameStarted || this.currentTrick.length >= 4) return;
+
 			const activePlayer = this.players[this.currentTurnIndex];
-			if (activePlayer.id !== playerId) return;
+			if (!activePlayer || activePlayer.id !== playerId) return;
 
 			const cardIndex = parseInt(textMessage.split(':')[1]);
 			const myHand = this.hands[playerId];
+
+			if (!myHand) return;
 
 			if (cardIndex >= 0 && cardIndex < myHand.length) {
 				const attemptedCard = myHand[cardIndex];
