@@ -117,6 +117,7 @@
 			playersList = [];
 			currentRoomCode = '';
 			fetchRooms();
+		};
 	}
 
 	function playCard(index: number) {
@@ -129,6 +130,23 @@
 			errorMessage = `FRONTEND ERROR: ${err.message}`;
 			setTimeout(() => (errorMessage = ''), 4000);
 		}
+	}
+
+	function quitRoom() {
+		if (socket) {
+			socket.onclose = null;
+			socket.close();
+			socket = null;
+		}
+		isConnected = false;
+		gameStarted = false;
+		myHand = [];
+		table = [];
+		playersList = [];
+		currentRoomCode = '';
+		activePlayerId = '';
+		myPlayerId = '';
+		fetchRooms();
 	}
 </script>
 
@@ -244,7 +262,7 @@
 			</button>
 
 			<button
-				onclick={() => socket?.close()}
+				onclick={quitRoom}
 				class="mt-6 text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
 			>
 				Leave Room
@@ -272,7 +290,7 @@
 					Room: {currentRoomCode}
 				</div>
 				<button
-					onclick={() => socket?.close()}
+					onclick={quitRoom}
 					class="text-left text-xs font-bold tracking-widest text-red-400/60 uppercase hover:text-red-400"
 				>
 					Quit Match
