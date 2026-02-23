@@ -9,6 +9,7 @@
 	let playersList: any[] = $state([]);
 	let activePlayerId = $state('');
 	let myPlayerId = $state('');
+	let ownerId = $state('');
 	let gameStarted = $state(false);
 	let team1Points = $state(0);
 	let team2Points = $state(0);
@@ -22,6 +23,9 @@
 	let isSoloMode = $state(false);
 	let openRooms: any[] = $state([]);
 	let lobbyTimer: ReturnType<typeof setInterval>;
+
+	let isWaitingForHost = $state(false);
+	let approvalRequests: string[] = $state([]);
 
 	let isMyTurn = $derived(
 		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
@@ -41,7 +45,7 @@
 				openRooms = await res.json();
 			}
 		} catch (e) {
-			console.error('Failed to fetch lobby rooms');
+			console.error('Failed to fetch lobby');
 		}
 	}
 
@@ -49,7 +53,6 @@
 		fetchRooms();
 		lobbyTimer = setInterval(fetchRooms, 3000);
 	});
-
 	onDestroy(() => {
 		if (lobbyTimer) clearInterval(lobbyTimer);
 	});
@@ -63,13 +66,13 @@
 		return Math.random().toString(36).substring(2, 6).toUpperCase();
 	}
 
-	function connectToTable(code: string, solo: boolean = false) {
+	function connectToTable(code: string, solo: boolean = false, isPrivate: boolean = false) {
 		if (!code) return;
 		currentRoomCode = code.toUpperCase();
 		isSoloMode = solo;
 
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}`;
+		const wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}${isPrivate ? '?private=true' : ''}`;
 
 		socket = new WebSocket(wsUrl);
 
@@ -84,7 +87,9 @@
 			const data = JSON.parse(event.data);
 
 			if (data.action === 'GAME_STATE_UPDATE') {
+				isWaitingForHost = false;
 				gameStarted = data.gameStarted;
+				ownerId = data.ownerId;
 				myHand = data.myHand;
 				table = data.table;
 				playersList = data.players;
@@ -95,6 +100,13 @@
 				team1MatchPoints = data.team1MatchPoints;
 				team2MatchPoints = data.team2MatchPoints;
 				trumpCard = data.trumpCard;
+			} else if (data.action === 'WAITING_APPROVAL') {
+				isWaitingForHost = true;
+			} else if (data.action === 'APPROVAL_REQUEST') {
+				approvalRequests = data.requests;
+			} else if (data.action === 'REJECTED') {
+				errorMessage = 'The host declined your join request.';
+				setTimeout(() => quitRoom(), 2000);
 			} else if (data.action === 'ERROR') {
 				errorMessage = data.message;
 				setTimeout(() => (errorMessage = ''), 4000);
@@ -110,21 +122,13 @@
 		};
 
 		socket.onclose = () => {
-			isConnected = false;
-			gameStarted = false;
-			myHand = [];
-			table = [];
-			playersList = [];
-			currentRoomCode = '';
-			fetchRooms();
+			quitRoom();
 		};
 	}
 
 	function playCard(index: number) {
 		try {
-			if (!socket) throw new Error('WebSocket is entirely null.');
-			if (socket.readyState !== WebSocket.OPEN)
-				throw new Error(`Socket is disconnected. Refresh the page.`);
+			if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error(`Socket disconnected.`);
 			socket.send(`PLAY_CARD:${index}`);
 		} catch (err: any) {
 			errorMessage = `FRONTEND ERROR: ${err.message}`;
@@ -139,13 +143,16 @@
 			socket = null;
 		}
 		isConnected = false;
+		isWaitingForHost = false;
 		gameStarted = false;
 		myHand = [];
 		table = [];
 		playersList = [];
+		approvalRequests = [];
 		currentRoomCode = '';
 		activePlayerId = '';
 		myPlayerId = '';
+		ownerId = '';
 		fetchRooms();
 	}
 </script>
@@ -153,23 +160,38 @@
 <main
 	class="flex min-h-screen flex-col items-center justify-center bg-emerald-900 p-4 font-sans text-white selection:bg-emerald-500"
 >
+	{#if errorMessage}
+		<div
+			class="fixed top-10 left-1/2 z-50 -translate-x-1/2 animate-bounce rounded-full border-2 border-red-400 bg-red-900/90 px-6 py-2 font-bold text-white shadow-xl backdrop-blur-md"
+		>
+			⚠️ {errorMessage}
+		</div>
+	{/if}
+
 	{#if !isConnected}
 		<div class="w-full max-w-lg rounded-xl border border-emerald-700 bg-emerald-800 p-8 shadow-2xl">
 			<h1 class="mb-8 text-center text-4xl font-bold text-amber-400">Sueca Online</h1>
 
 			<div class="space-y-6">
+				<button
+					onclick={() => connectToTable(generateRoomCode(), true, false)}
+					class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
+				>
+					👤 Solo Match
+				</button>
+
 				<div class="flex gap-4">
 					<button
-						onclick={() => connectToTable(generateRoomCode(), true)}
-						class="flex-1 rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
+						onclick={() => connectToTable(generateRoomCode(), false, false)}
+						class="flex-1 rounded-lg bg-emerald-600 py-3 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
 					>
-						👤 Solo Match
+						➕ Public Room
 					</button>
 					<button
-						onclick={() => connectToTable(generateRoomCode(), false)}
-						class="flex-1 rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+						onclick={() => connectToTable(generateRoomCode(), false, true)}
+						class="flex-1 rounded-lg border-2 border-amber-500 bg-emerald-800 py-3 font-bold text-amber-500 shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-700"
 					>
-						➕ Create Room
+						🔒 Private Room
 					</button>
 				</div>
 
@@ -179,15 +201,14 @@
 						<button
 							onclick={fetchRooms}
 							class="text-xs font-bold tracking-wider text-emerald-400 uppercase hover:text-white"
+							>🔄 Refresh</button
 						>
-							🔄 Refresh
-						</button>
 					</div>
 
 					<div class="custom-scrollbar max-h-48 space-y-2 overflow-y-auto pr-2">
 						{#if openRooms.length === 0}
 							<div class="py-6 text-center text-sm font-bold text-emerald-700">
-								No rooms active right now. Start one!
+								No rooms active right now.
 							</div>
 						{:else}
 							{#each openRooms as room}
@@ -195,18 +216,22 @@
 									class="flex items-center justify-between rounded-lg border border-emerald-800 bg-emerald-900 p-3 shadow-sm transition-colors hover:border-emerald-600"
 								>
 									<div>
-										<div class="font-mono text-lg font-bold text-amber-400">{room.code}</div>
+										<div class="font-mono text-lg font-bold text-amber-400">
+											{room.code}
+											{#if room.isPrivate}
+												<span class="text-sm">🔒</span>
+											{/if}
+										</div>
 										<div
 											class="text-xs font-bold tracking-widest uppercase {room.status === 'playing'
 												? 'text-red-400'
 												: 'text-emerald-400'}"
 										>
 											{room.status === 'playing' ? 'In Progress' : 'Waiting'} • {room.playerCount}/4
-											Players
 										</div>
 									</div>
 									<button
-										onclick={() => connectToTable(room.code, false)}
+										onclick={() => connectToTable(room.code, false, false)}
 										disabled={room.playerCount >= 4 || room.status === 'playing'}
 										class="rounded-lg bg-amber-500 px-6 py-2 font-bold text-emerald-950 shadow-md transition-transform hover:-translate-y-0.5 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0"
 									>
@@ -218,12 +243,6 @@
 					</div>
 				</div>
 
-				<div class="flex items-center gap-4 text-emerald-400">
-					<div class="h-px flex-1 bg-emerald-700"></div>
-					<span class="text-xs font-bold tracking-widest uppercase">Or Join By Code</span>
-					<div class="h-px flex-1 bg-emerald-700"></div>
-				</div>
-
 				<div class="flex gap-2">
 					<input
 						type="text"
@@ -233,40 +252,92 @@
 						class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 text-center font-mono text-xl font-bold text-white uppercase placeholder-emerald-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
 					/>
 					<button
-						onclick={() => connectToTable(roomInput, false)}
+						onclick={() => connectToTable(roomInput, false, false)}
 						disabled={roomInput.length < 4}
 						class="rounded-lg bg-emerald-700 px-8 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+						>Join</button
 					>
-						Join
-					</button>
 				</div>
 			</div>
+		</div>
+	{:else if isWaitingForHost}
+		<div
+			class="w-full max-w-md rounded-xl border border-amber-600 bg-emerald-800 p-8 text-center shadow-2xl"
+		>
+			<div class="mb-6 animate-pulse text-6xl">🔒</div>
+			<h1 class="mb-2 text-2xl font-bold text-amber-400">Waiting for Host Approval...</h1>
+			<p class="mb-8 text-emerald-200">
+				The owner of room <strong>{currentRoomCode}</strong> is reviewing your request to join.
+			</p>
+			<button
+				onclick={quitRoom}
+				class="text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
+				>Cancel Request</button
+			>
 		</div>
 	{:else if !gameStarted}
 		<div
 			class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 text-center shadow-2xl"
 		>
-			<h1 class="mb-2 text-3xl font-bold text-amber-400">Waiting for players...</h1>
+			<h1 class="mb-2 text-3xl font-bold text-amber-400">
+				{#if ownerId === myPlayerId}
+					👑 You are the Host!
+				{:else}
+					Waiting for players...
+				{/if}
+			</h1>
 			<p class="mb-8 text-emerald-200">Players in room: {playersList.length}/4</p>
 
-			<div class="mb-8 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
+			<div class="mb-6 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
 				<div class="mb-2 text-sm tracking-widest text-emerald-400 uppercase">Room Code</div>
 				<div class="font-mono text-5xl font-bold tracking-widest text-white">{currentRoomCode}</div>
 			</div>
 
-			<button
-				onclick={() => socket?.send('START_GAME')}
-				class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
-			>
-				Start Game Now (Fill with Bots)
-			</button>
+			{#if ownerId === myPlayerId && approvalRequests.length > 0}
+				<div class="mb-6 rounded-lg border-2 border-amber-500 bg-emerald-900 p-4">
+					<h3 class="mb-3 text-sm font-bold tracking-widest text-amber-400 uppercase">
+						Pending Requests
+					</h3>
+					<div class="space-y-2">
+						{#each approvalRequests as reqId}
+							<div
+								class="flex items-center justify-between rounded border border-emerald-700 bg-emerald-950 p-2"
+							>
+								<span class="font-bold">{reqId}</span>
+								<div class="flex gap-2">
+									<button
+										onclick={() => socket?.send(`DECLINE_PLAYER:${reqId}`)}
+										class="rounded bg-red-900/50 px-3 py-1 text-xs font-bold text-red-400 uppercase hover:bg-red-800"
+										>Decline</button
+									>
+									<button
+										onclick={() => socket?.send(`ACCEPT_PLAYER:${reqId}`)}
+										class="rounded bg-amber-500 px-3 py-1 text-xs font-bold text-emerald-950 uppercase hover:bg-amber-400"
+										>Accept</button
+									>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			{#if ownerId === myPlayerId}
+				<button
+					onclick={() => socket?.send('START_GAME')}
+					class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+				>
+					Start Game Now (Fill with Bots)
+				</button>
+			{:else}
+				<div class="py-4 text-emerald-400 italic">Waiting for host to start the game...</div>
+			{/if}
 
 			<button
 				onclick={quitRoom}
 				class="mt-6 text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
+				>Leave Room</button
 			>
-				Leave Room
-			</button>
 		</div>
 	{:else}
 		<div
@@ -292,9 +363,8 @@
 				<button
 					onclick={quitRoom}
 					class="text-left text-xs font-bold tracking-widest text-red-400/60 uppercase hover:text-red-400"
+					>Quit Match</button
 				>
-					Quit Match
-				</button>
 			</div>
 
 			{#if trumpCard}
@@ -311,14 +381,6 @@
 				</div>
 			{/if}
 
-			{#if errorMessage}
-				<div
-					class="absolute top-1/4 left-1/2 z-50 -translate-x-1/2 animate-bounce rounded-full border-2 border-red-400 bg-red-900/90 px-6 py-2 font-bold text-white shadow-xl backdrop-blur-md"
-				>
-					⚠️ {errorMessage}
-				</div>
-			{/if}
-
 			<div class="flex h-20 w-full items-center justify-center">
 				{#if playerNorth}
 					<div
@@ -329,7 +391,7 @@
 						<div
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
 						>
-							{playerNorth.id} (Partner)
+							{playerNorth.id} (Partner) {ownerId === playerNorth.id ? '👑' : ''}
 						</div>
 					</div>
 				{/if}
@@ -346,6 +408,7 @@
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
 						>
 							{playerWest.id}
+							{ownerId === playerWest.id ? '👑' : ''}
 						</div>
 					</div>
 				{/if}
@@ -406,6 +469,7 @@
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
 						>
 							{playerEast.id}
+							{ownerId === playerEast.id ? '👑' : ''}
 						</div>
 					</div>
 				{/if}
@@ -463,7 +527,6 @@
 </main>
 
 <style>
-	/* Add a custom thin scrollbar for the lobby room list */
 	.custom-scrollbar::-webkit-scrollbar {
 		width: 6px;
 	}
@@ -471,7 +534,7 @@
 		background: transparent;
 	}
 	.custom-scrollbar::-webkit-scrollbar-thumb {
-		background-color: #047857; /* emerald-700 */
+		background-color: #047857;
 		border-radius: 10px;
 	}
 </style>
