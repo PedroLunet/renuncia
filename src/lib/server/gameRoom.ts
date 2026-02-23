@@ -18,6 +18,10 @@ export interface PlayedCard {
 }
 
 export class GameRoom extends DurableObject {
+	env: any;
+	roomCode: string = '';
+	isPrivate: boolean = false;
+
 	players: Player[] = [];
 	deck: Card[] = [];
 	hands: Record<string, Card[]> = {};
@@ -32,11 +36,14 @@ export class GameRoom extends DurableObject {
 	team1MatchPoints: number = 0;
 	team2MatchPoints: number = 0;
 
-	constructor(ctx: DurableObjectState, env: unknown) {
+	constructor(ctx: DurableObjectState, env: any) {
 		super(ctx, env);
+		this.env = env;
+
 		this.ctx.blockConcurrencyWhile(async () => {
 			const stored = await this.ctx.storage.get<any>('gameState');
 			if (stored) {
+				this.roomCode = stored.roomCode || '';
 				this.players = stored.players || [];
 				this.deck = stored.deck || [];
 				this.hands = stored.hands || {};
@@ -54,6 +61,7 @@ export class GameRoom extends DurableObject {
 
 	private async saveState() {
 		await this.ctx.storage.put('gameState', {
+			roomCode: this.roomCode,
 			players: this.players,
 			deck: this.deck,
 			hands: this.hands,
@@ -68,10 +76,40 @@ export class GameRoom extends DurableObject {
 		});
 	}
 
+	private async reportToLobby() {
+		if (!this.roomCode || !this.env.LOBBY_MANAGER) return;
+
+		try {
+			const lobbyId = this.env.LOBBY_MANAGER.idFromName('GLOBAL_LOBBY_INSTANCE');
+			const lobbyStub = this.env.LOBBY_MANAGER.get(lobbyId);
+
+			const humanCount = this.players.filter((p) => !p.isBot).length;
+
+			if (humanCount === 0) {
+				await lobbyStub.fetch(`http://internal/lobby?code=${this.roomCode}`, { method: 'DELETE' });
+			} else {
+				await lobbyStub.fetch('http://internal/lobby', {
+					method: 'POST',
+					body: JSON.stringify({
+						code: this.roomCode,
+						isPrivate: this.isPrivate,
+						playerCount: this.players.length,
+						status: this.gameStarted ? 'playing' : 'waiting'
+					})
+				});
+			}
+		} catch (e) {
+			console.error('Failed to report to lobby:', e);
+		}
+	}
+
 	async fetch(request: Request): Promise<Response> {
 		const upgradeHeader = request.headers.get('Upgrade');
 		if (!upgradeHeader || upgradeHeader !== 'websocket')
 			return new Response('Expected Upgrade: websocket', { status: 426 });
+
+		const url = new URL(request.url);
+		this.roomCode = url.pathname.split('/').pop() || 'UNKNOWN';
 
 		const webSocketPair = new WebSocketPair();
 		const [client, server] = Object.values(webSocketPair);
@@ -83,6 +121,8 @@ export class GameRoom extends DurableObject {
 		if (!this.gameStarted && this.players.length < 4) {
 			this.players.push({ id: playerId, isBot: false });
 			await this.saveState();
+
+			this.ctx.waitUntil(this.reportToLobby());
 		}
 
 		server.send(
@@ -113,6 +153,7 @@ export class GameRoom extends DurableObject {
 			if (!this.players.find((p) => p.id === playerId)) {
 				this.players.push({ id: playerId, isBot: false });
 				await this.saveState();
+				this.ctx.waitUntil(this.reportToLobby());
 			}
 
 			if (textMessage === 'START_GAME' && !this.gameStarted) {
@@ -137,6 +178,8 @@ export class GameRoom extends DurableObject {
 				this.team2Points = 0;
 
 				await this.saveState();
+				this.ctx.waitUntil(this.reportToLobby());
+
 				this.broadcastGameState();
 				this.processTurn();
 				return;
@@ -148,10 +191,7 @@ export class GameRoom extends DurableObject {
 					return;
 				}
 
-				if (this.currentTrick.length >= 4) {
-					ws.send(JSON.stringify({ action: 'ERROR', message: 'Table is full, resolving...' }));
-					return;
-				}
+				if (this.currentTrick.length >= 4) return;
 
 				const activePlayer = this.players[this.currentTurnIndex];
 				if (!activePlayer || activePlayer.id !== playerId) {
@@ -161,7 +201,6 @@ export class GameRoom extends DurableObject {
 
 				const cardIndex = parseInt(textMessage.split(':')[1], 10);
 				const myHand = this.hands[playerId];
-
 				if (!myHand) return;
 
 				const attemptedCard = myHand[cardIndex];
@@ -199,6 +238,7 @@ export class GameRoom extends DurableObject {
 		if (!this.gameStarted) {
 			this.players = this.players.filter((p) => p.id !== playerId);
 			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
 		}
 	}
 
@@ -238,6 +278,7 @@ export class GameRoom extends DurableObject {
 					}
 
 					await this.saveState();
+					this.ctx.waitUntil(this.reportToLobby()); // Tell lobby game is back in waiting state
 					this.broadcast({
 						action: 'GAME_OVER',
 						t1: this.team1Points,
