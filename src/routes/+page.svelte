@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+
 	let socket: WebSocket | null = null;
 
 	let isConnected = $state(false);
@@ -18,6 +20,8 @@
 	let roomInput = $state('');
 	let currentRoomCode = $state('');
 	let isSoloMode = $state(false);
+	let openRooms: any[] = $state([]);
+	let lobbyTimer: ReturnType<typeof setInterval>;
 
 	let isMyTurn = $derived(
 		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
@@ -28,6 +32,27 @@
 	let playerWest = $derived(playersList[(myIndex + 1) % 4]);
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerEast = $derived(playersList[(myIndex + 3) % 4]);
+
+	async function fetchRooms() {
+		if (isConnected) return;
+		try {
+			const res = await fetch('/api/lobby');
+			if (res.ok) {
+				openRooms = await res.json();
+			}
+		} catch (e) {
+			console.error('Failed to fetch lobby rooms');
+		}
+	}
+
+	onMount(() => {
+		fetchRooms();
+		lobbyTimer = setInterval(fetchRooms, 3000);
+	});
+
+	onDestroy(() => {
+		if (lobbyTimer) clearInterval(lobbyTimer);
+	});
 
 	function getPlayedCard(playerId: string | undefined) {
 		if (!playerId) return null;
@@ -91,7 +116,7 @@
 			table = [];
 			playersList = [];
 			currentRoomCode = '';
-		};
+			fetchRooms();
 	}
 
 	function playCard(index: number) {
@@ -111,42 +136,88 @@
 	class="flex min-h-screen flex-col items-center justify-center bg-emerald-900 p-4 font-sans text-white selection:bg-emerald-500"
 >
 	{#if !isConnected}
-		<div class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 shadow-2xl">
+		<div class="w-full max-w-lg rounded-xl border border-emerald-700 bg-emerald-800 p-8 shadow-2xl">
 			<h1 class="mb-8 text-center text-4xl font-bold text-amber-400">Sueca Online</h1>
 
 			<div class="space-y-6">
-				<button
-					onclick={() => connectToTable(generateRoomCode(), true)}
-					class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
-				>
-					👤 Play Solo (vs Bots)
-				</button>
+				<div class="flex gap-4">
+					<button
+						onclick={() => connectToTable(generateRoomCode(), true)}
+						class="flex-1 rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
+					>
+						👤 Solo Match
+					</button>
+					<button
+						onclick={() => connectToTable(generateRoomCode(), false)}
+						class="flex-1 rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+					>
+						➕ Create Room
+					</button>
+				</div>
+
+				<div class="rounded-xl border border-emerald-700 bg-emerald-950/50 p-6">
+					<div class="mb-4 flex items-center justify-between">
+						<h2 class="text-xl font-bold text-emerald-300">Open Rooms</h2>
+						<button
+							onclick={fetchRooms}
+							class="text-xs font-bold tracking-wider text-emerald-400 uppercase hover:text-white"
+						>
+							🔄 Refresh
+						</button>
+					</div>
+
+					<div class="custom-scrollbar max-h-48 space-y-2 overflow-y-auto pr-2">
+						{#if openRooms.length === 0}
+							<div class="py-6 text-center text-sm font-bold text-emerald-700">
+								No rooms active right now. Start one!
+							</div>
+						{:else}
+							{#each openRooms as room}
+								<div
+									class="flex items-center justify-between rounded-lg border border-emerald-800 bg-emerald-900 p-3 shadow-sm transition-colors hover:border-emerald-600"
+								>
+									<div>
+										<div class="font-mono text-lg font-bold text-amber-400">{room.code}</div>
+										<div
+											class="text-xs font-bold tracking-widest uppercase {room.status === 'playing'
+												? 'text-red-400'
+												: 'text-emerald-400'}"
+										>
+											{room.status === 'playing' ? 'In Progress' : 'Waiting'} • {room.playerCount}/4
+											Players
+										</div>
+									</div>
+									<button
+										onclick={() => connectToTable(room.code, false)}
+										disabled={room.playerCount >= 4 || room.status === 'playing'}
+										class="rounded-lg bg-amber-500 px-6 py-2 font-bold text-emerald-950 shadow-md transition-transform hover:-translate-y-0.5 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0"
+									>
+										Join
+									</button>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
 
 				<div class="flex items-center gap-4 text-emerald-400">
 					<div class="h-px flex-1 bg-emerald-700"></div>
-					<span class="text-sm font-bold tracking-widest uppercase">Multiplayer</span>
+					<span class="text-xs font-bold tracking-widest uppercase">Or Join By Code</span>
 					<div class="h-px flex-1 bg-emerald-700"></div>
 				</div>
-
-				<button
-					onclick={() => connectToTable(generateRoomCode(), false)}
-					class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
-				>
-					➕ Create New Room
-				</button>
 
 				<div class="flex gap-2">
 					<input
 						type="text"
 						bind:value={roomInput}
-						placeholder="Room Code (e.g. ABCD)"
+						placeholder="ABCD"
 						maxlength="4"
-						class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 font-mono text-xl font-bold text-white uppercase placeholder-emerald-700 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+						class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 text-center font-mono text-xl font-bold text-white uppercase placeholder-emerald-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
 					/>
 					<button
 						onclick={() => connectToTable(roomInput, false)}
 						disabled={roomInput.length < 4}
-						class="rounded-lg bg-amber-500 px-6 font-bold text-emerald-950 shadow-lg transition-transform hover:-translate-y-1 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+						class="rounded-lg bg-emerald-700 px-8 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
 					>
 						Join
 					</button>
@@ -174,7 +245,7 @@
 
 			<button
 				onclick={() => socket?.close()}
-				class="mt-4 text-sm text-emerald-400 hover:text-white"
+				class="mt-6 text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
 			>
 				Leave Room
 			</button>
@@ -196,8 +267,16 @@
 				</div>
 			</div>
 
-			<div class="absolute bottom-4 left-4 z-20 font-mono text-xs text-emerald-400/50 uppercase">
-				Room: {currentRoomCode}
+			<div class="absolute bottom-4 left-4 z-20 flex flex-col gap-2">
+				<div class="font-mono text-xs font-bold tracking-widest text-emerald-400/50 uppercase">
+					Room: {currentRoomCode}
+				</div>
+				<button
+					onclick={() => socket?.close()}
+					class="text-left text-xs font-bold tracking-widest text-red-400/60 uppercase hover:text-red-400"
+				>
+					Quit Match
+				</button>
 			</div>
 
 			{#if trumpCard}
@@ -364,3 +443,17 @@
 		</div>
 	{/if}
 </main>
+
+<style>
+	/* Add a custom thin scrollbar for the lobby room list */
+	.custom-scrollbar::-webkit-scrollbar {
+		width: 6px;
+	}
+	.custom-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.custom-scrollbar::-webkit-scrollbar-thumb {
+		background-color: #047857; /* emerald-700 */
+		border-radius: 10px;
+	}
+</style>
