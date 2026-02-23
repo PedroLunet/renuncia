@@ -15,6 +15,10 @@
 	let trumpCard: any = $state(null);
 	let errorMessage = $state('');
 
+	let roomInput = $state('');
+	let currentRoomCode = $state('');
+	let isSoloMode = $state(false);
+
 	let isMyTurn = $derived(
 		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
 	);
@@ -30,14 +34,25 @@
 		return table.find((play) => play.playerId === playerId)?.card;
 	}
 
-	function connectToTable() {
+	function generateRoomCode() {
+		return Math.random().toString(36).substring(2, 6).toUpperCase();
+	}
+
+	function connectToTable(code: string, solo: boolean = false) {
+		if (!code) return;
+		currentRoomCode = code.toUpperCase();
+		isSoloMode = solo;
+
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host}/api/play`;
+		const wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}`;
 
 		socket = new WebSocket(wsUrl);
 
 		socket.onopen = () => {
 			isConnected = true;
+			if (isSoloMode) {
+				setTimeout(() => socket?.send('START_GAME'), 500);
+			}
 		};
 
 		socket.onmessage = (event) => {
@@ -63,6 +78,9 @@
 					`Round Over!\nTeam 1: ${data.t1} pts | Team 2: ${data.t2} pts\n\n${data.matchResult}`
 				);
 				gameStarted = false;
+				if (isSoloMode) {
+					setTimeout(() => socket?.send('START_GAME'), 2000);
+				}
 			}
 		};
 
@@ -72,6 +90,7 @@
 			myHand = [];
 			table = [];
 			playersList = [];
+			currentRoomCode = '';
 		};
 	}
 
@@ -92,41 +111,72 @@
 	class="flex min-h-screen flex-col items-center justify-center bg-emerald-900 p-4 font-sans text-white selection:bg-emerald-500"
 >
 	{#if !isConnected}
-		<div
-			class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 text-center shadow-2xl"
-		>
-			<h1 class="mb-8 text-4xl font-bold text-amber-400">Sueca Online</h1>
-			<button
-				onclick={connectToTable}
-				class="w-full rounded-lg bg-amber-500 py-4 font-bold text-emerald-950 shadow-lg transition-transform hover:-translate-y-1 hover:bg-amber-400"
-			>
-				Join Table
-			</button>
+		<div class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 shadow-2xl">
+			<h1 class="mb-8 text-center text-4xl font-bold text-amber-400">Sueca Online</h1>
+
+			<div class="space-y-6">
+				<button
+					onclick={() => connectToTable(generateRoomCode(), true)}
+					class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
+				>
+					👤 Play Solo (vs Bots)
+				</button>
+
+				<div class="flex items-center gap-4 text-emerald-400">
+					<div class="h-px flex-1 bg-emerald-700"></div>
+					<span class="text-sm font-bold tracking-widest uppercase">Multiplayer</span>
+					<div class="h-px flex-1 bg-emerald-700"></div>
+				</div>
+
+				<button
+					onclick={() => connectToTable(generateRoomCode(), false)}
+					class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+				>
+					➕ Create New Room
+				</button>
+
+				<div class="flex gap-2">
+					<input
+						type="text"
+						bind:value={roomInput}
+						placeholder="Room Code (e.g. ABCD)"
+						maxlength="4"
+						class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 font-mono text-xl font-bold text-white uppercase placeholder-emerald-700 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+					/>
+					<button
+						onclick={() => connectToTable(roomInput, false)}
+						disabled={roomInput.length < 4}
+						class="rounded-lg bg-amber-500 px-6 font-bold text-emerald-950 shadow-lg transition-transform hover:-translate-y-1 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+					>
+						Join
+					</button>
+				</div>
+			</div>
 		</div>
 	{:else if !gameStarted}
 		<div
 			class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 text-center shadow-2xl"
 		>
-			<h1 class="mb-4 text-3xl font-bold text-amber-400">Waiting for players...</h1>
-			<div class="mb-8 text-emerald-200">
-				You are <span class="font-bold text-white">{myPlayerId}</span>
-			</div>
+			<h1 class="mb-2 text-3xl font-bold text-amber-400">Waiting for players...</h1>
+			<p class="mb-8 text-emerald-200">Players in room: {playersList.length}/4</p>
 
-			{#if team1MatchPoints > 0 || team2MatchPoints > 0}
-				<div
-					class="mb-8 rounded-lg border border-emerald-800 bg-emerald-950 p-4 text-lg font-bold shadow-inner"
-				>
-					🏆 Match Score <br />
-					<span class="text-amber-400">Team 1: {team1MatchPoints}</span> |
-					<span class="text-emerald-400">Team 2: {team2MatchPoints}</span>
-				</div>
-			{/if}
+			<div class="mb-8 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
+				<div class="mb-2 text-sm tracking-widest text-emerald-400 uppercase">Room Code</div>
+				<div class="font-mono text-5xl font-bold tracking-widest text-white">{currentRoomCode}</div>
+			</div>
 
 			<button
 				onclick={() => socket?.send('START_GAME')}
 				class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
 			>
-				Start Game (Add Bots)
+				Start Game Now (Fill with Bots)
+			</button>
+
+			<button
+				onclick={() => socket?.close()}
+				class="mt-4 text-sm text-emerald-400 hover:text-white"
+			>
+				Leave Room
 			</button>
 		</div>
 	{:else}
@@ -144,6 +194,10 @@
 					<div class="text-xl font-bold text-white">{team2Points} pts</div>
 					<div class="text-xs text-white/70">{team2MatchPoints} Sets</div>
 				</div>
+			</div>
+
+			<div class="absolute bottom-4 left-4 z-20 font-mono text-xs text-emerald-400/50 uppercase">
+				Room: {currentRoomCode}
 			</div>
 
 			{#if trumpCard}
