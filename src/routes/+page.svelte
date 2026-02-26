@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { fly, fade } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 
 	let socket: WebSocket | null = null;
 
@@ -464,6 +466,7 @@
 				<div class="relative h-64 w-64 rounded-full border-2 border-dashed border-emerald-600/50">
 					{#if getPlayedCard(playerNorth?.id)}
 						<div
+							in:fly={{ y: -100, duration: 300, easing: cubicOut }}
 							class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
 						>
 							<img
@@ -477,6 +480,7 @@
 
 					{#if getPlayedCard(playerSouth?.id)}
 						<div
+							in:fly={{ y: 100, duration: 300, easing: cubicOut }}
 							class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
 						>
 							<img
@@ -490,6 +494,7 @@
 
 					{#if getPlayedCard(playerWest?.id)}
 						<div
+							in:fly={{ x: -100, duration: 300, easing: cubicOut }}
 							class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg"
 						>
 							<img
@@ -503,6 +508,7 @@
 
 					{#if getPlayedCard(playerEast?.id)}
 						<div
+							in:fly={{ x: 100, duration: 300, easing: cubicOut }}
 							class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg"
 						>
 							<img
@@ -554,6 +560,7 @@
 								: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
 							style="transform: translateY({Math.abs(index - myHand.length / 2) *
 								5}px) rotate({(index - myHand.length / 2) * 3}deg);"
+							in:fly={{ y: 200, duration: 400, delay: index * 60, easing: cubicOut }}
 						>
 							<img
 								src="/cards/{card.suit}-{card.rank}.svg"
