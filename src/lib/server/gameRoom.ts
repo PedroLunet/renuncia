@@ -88,7 +88,8 @@ export class GameRoom extends DurableObject {
 	}
 
 	private async reportToLobby() {
-		if (!this.roomCode || !this.env.LOBBY_MANAGER) return;
+		if (!this.roomCode || !this.env.LOBBY_MANAGER || this.roomCode.startsWith('SOLO_')) return;
+
 		try {
 			const lobbyId = this.env.LOBBY_MANAGER.idFromName('GLOBAL_LOBBY_INSTANCE');
 			const lobbyStub = this.env.LOBBY_MANAGER.get(lobbyId);
