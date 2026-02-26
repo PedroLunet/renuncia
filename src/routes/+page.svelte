@@ -162,9 +162,15 @@
 
 	function quitRoom() {
 		if (socket) {
+			if (socket.readyState === WebSocket.OPEN) {
+				socket.send('LEAVE_ROOM');
+			}
+
 			socket.onclose = null;
-			socket.close();
-			socket = null;
+			setTimeout(() => {
+				if (socket) socket.close();
+				socket = null;
+			}, 50);
 		}
 
 		localStorage.removeItem('sueca_room_code');
@@ -183,7 +189,8 @@
 		activePlayerId = '';
 		myPlayerId = '';
 		ownerId = '';
-		fetchRooms();
+
+		setTimeout(fetchRooms, 200);
 	}
 </script>
 

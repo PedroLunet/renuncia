@@ -186,6 +186,11 @@ export class GameRoom extends DurableObject {
 			const { playerId } = ws.deserializeAttachment();
 			const textMessage = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
+			if (textMessage === 'LEAVE_ROOM') {
+				await this.handlePlayerDrop(playerId);
+				return;
+			}
+
 			if (textMessage.startsWith('ACCEPT_PLAYER:')) {
 				if (playerId !== this.ownerId) return;
 				const targetId = textMessage.split(':')[1];
