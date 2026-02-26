@@ -39,6 +39,8 @@ export class GameRoom extends DurableObject {
 	team1MatchPoints: number = 0;
 	team2MatchPoints: number = 0;
 
+	disconnectTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
 	constructor(ctx: DurableObjectState, env: any) {
 		super(ctx, env);
 		this.env = env;
@@ -129,19 +131,36 @@ export class GameRoom extends DurableObject {
 		this.roomCode = url.pathname.split('/').pop() || 'UNKNOWN';
 		const isCreatingPrivate = url.searchParams.get('private') === 'true';
 
+		let playerId = url.searchParams.get('playerId');
+		if (!playerId) playerId = crypto.randomUUID().substring(0, 4).toUpperCase();
+
 		const webSocketPair = new WebSocketPair();
 		const [client, server] = Object.values(webSocketPair);
-		const playerId = crypto.randomUUID().substring(0, 4).toUpperCase();
 
 		server.serializeAttachment({ playerId });
 		this.ctx.acceptWebSocket(server);
 
-		if (this.players.length === 0 && !this.gameStarted) {
-			this.isPrivate = isCreatingPrivate;
-			this.ownerId = playerId;
+		const existingPlayer = this.players.find((p) => p.id === playerId);
+
+		if (this.disconnectTimeouts.has(playerId)) {
+			clearTimeout(this.disconnectTimeouts.get(playerId));
+			this.disconnectTimeouts.delete(playerId);
 		}
 
-		if (!this.gameStarted && this.players.length < 4) {
+		if (existingPlayer) {
+			existingPlayer.isBot = false;
+			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
+		} else if (this.pendingPlayers.includes(playerId)) {
+			server.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
+			this.notifyOwner();
+		} else if (this.players.length === 0 && !this.gameStarted) {
+			this.isPrivate = isCreatingPrivate;
+			this.ownerId = playerId;
+			this.players.push({ id: playerId, isBot: false });
+			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
+		} else if (!this.gameStarted && this.players.length < 4) {
 			if (this.isPrivate && this.ownerId !== playerId) {
 				if (!this.pendingPlayers.includes(playerId)) {
 					this.pendingPlayers.push(playerId);
@@ -297,6 +316,20 @@ export class GameRoom extends DurableObject {
 	async webSocketClose(ws: WebSocket) {
 		const { playerId } = ws.deserializeAttachment();
 
+		const activeSockets = this.ctx
+			.getWebSockets()
+			.filter((s) => s !== ws && s.deserializeAttachment().playerId === playerId);
+		if (activeSockets.length > 0) return;
+
+		const timeout = setTimeout(async () => {
+			this.disconnectTimeouts.delete(playerId);
+			await this.handlePlayerDrop(playerId);
+		}, 5000);
+
+		this.disconnectTimeouts.set(playerId, timeout);
+	}
+
+	private async handlePlayerDrop(playerId: string) {
 		this.pendingPlayers = this.pendingPlayers.filter((id) => id !== playerId);
 		this.notifyOwner();
 
