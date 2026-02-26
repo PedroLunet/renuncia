@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
+	import gsap from 'gsap';
 
 	let socket: WebSocket | null = null;
 
@@ -43,6 +44,36 @@
 	let playerWest = $derived(playersList[(myIndex + 1) % 4]);
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerEast = $derived(playersList[(myIndex + 3) % 4]);
+
+	function dealAnimation(node: HTMLElement, { index }: { index: number }) {
+		tick().then(() => {
+			const deckEl = document.getElementById('deck');
+			if (!deckEl) return;
+
+			const deckRect = deckEl.getBoundingClientRect();
+			const cardRect = node.getBoundingClientRect();
+
+			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
+			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
+
+			gsap.from(node, {
+				x: deltaX,
+				y: deltaY,
+				scale: 0.2,
+				rotation: Math.random() * 90 - 45,
+				opacity: 0,
+				duration: 0.5,
+				delay: index * 0.05,
+				ease: 'back.out(1.2)'
+			});
+		});
+
+		return {
+			destroy() {
+				gsap.killTweensOf(node);
+			}
+		};
+	}
 
 	async function fetchRooms() {
 		if (isConnected) return;
@@ -431,13 +462,26 @@
 				</div>
 			{/if}
 
-			<div class="flex h-20 w-full items-center justify-center">
+			<div class="flex h-20 w-full items-center justify-center pt-4">
 				{#if playerNorth}
 					<div
 						class="flex flex-col items-center transition-all {activePlayerId === playerNorth.id
 							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
 							: 'opacity-70'}"
 					>
+						{#if myHand.length > 0}
+							<div class="mb-2 flex -space-x-6">
+								{#each Array(myHand.length) as _, index}
+									<img
+										src="/cards/back.svg"
+										alt="Card Back"
+										use:dealAnimation={{ index }}
+										class="h-auto w-12 drop-shadow-md"
+										draggable="false"
+									/>
+								{/each}
+							</div>
+						{/if}
 						<div
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
 						>
@@ -450,20 +494,56 @@
 			<div class="flex flex-1 items-center justify-between px-4">
 				{#if playerWest}
 					<div
-						class="flex flex-col items-center transition-all {activePlayerId === playerWest.id
+						class="flex flex-row items-center transition-all {activePlayerId === playerWest.id
 							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
 							: 'opacity-70'}"
 					>
 						<div
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
+							style="transform: rotate(-90deg);"
 						>
 							{playerWest.id}
 							{ownerId === playerWest.id && !isSoloMode ? '👑' : ''}
 						</div>
+						{#if myHand.length > 0}
+							<div class="ml-2 flex flex-col -space-y-8">
+								{#each Array(myHand.length) as _, index}
+									<img
+										src="/cards/back.svg"
+										alt="Card Back"
+										use:dealAnimation={{ index }}
+										class="h-auto w-12 drop-shadow-md"
+										style="transform: rotate(90deg);"
+										draggable="false"
+									/>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/if}
 
 				<div class="relative h-64 w-64 rounded-full border-2 border-dashed border-emerald-600/50">
+					<div
+						id="deck"
+						class="absolute top-1/2 left-1/2 h-24 w-16 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 {myHand.length >
+						0
+							? 'opacity-0 delay-1000'
+							: 'opacity-100'}"
+					>
+						<img
+							src="/cards/back.svg"
+							alt="Deck"
+							class="h-full w-full drop-shadow-2xl"
+							draggable="false"
+						/>
+						<img
+							src="/cards/back.svg"
+							alt=""
+							class="absolute top-0.5 left-0.5 -z-10 h-full w-full"
+						/>
+						<img src="/cards/back.svg" alt="" class="absolute top-1 left-1 -z-20 h-full w-full" />
+					</div>
+
 					{#if getPlayedCard(playerNorth?.id)}
 						<div
 							in:fly={{ y: -100, duration: 300, easing: cubicOut }}
@@ -523,12 +603,27 @@
 
 				{#if playerEast}
 					<div
-						class="flex flex-col items-center transition-all {activePlayerId === playerEast.id
+						class="flex flex-row items-center transition-all {activePlayerId === playerEast.id
 							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
 							: 'opacity-70'}"
 					>
+						{#if myHand.length > 0}
+							<div class="mr-2 flex flex-col -space-y-8">
+								{#each Array(myHand.length) as _, index}
+									<img
+										src="/cards/back.svg"
+										alt="Card Back"
+										use:dealAnimation={{ index }}
+										class="h-auto w-12 drop-shadow-md"
+										style="transform: rotate(-90deg);"
+										draggable="false"
+									/>
+								{/each}
+							</div>
+						{/if}
 						<div
 							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
+							style="transform: rotate(90deg);"
 						>
 							{playerEast.id}
 							{ownerId === playerEast.id && !isSoloMode ? '👑' : ''}
@@ -554,13 +649,13 @@
 					{#each myHand as card, index}
 						<button
 							onclick={() => playCard(index)}
+							use:dealAnimation={{ index }}
 							class="group relative flex h-36 w-24 flex-col justify-between rounded-xl transition-all duration-300 hover:z-50
               {isMyTurn
 								? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
 								: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
 							style="transform: translateY({Math.abs(index - myHand.length / 2) *
 								5}px) rotate({(index - myHand.length / 2) * 3}deg);"
-							in:fly={{ y: 200, duration: 400, delay: index * 60, easing: cubicOut }}
 						>
 							<img
 								src="/cards/{card.suit}-{card.rank}.svg"
