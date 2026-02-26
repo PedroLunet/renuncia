@@ -30,6 +30,8 @@
 	let isWaitingForHost = $state(false);
 	let approvalRequests: string[] = $state([]);
 
+	let localPlayerId = '';
+
 	let isMyTurn = $derived(
 		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
 	);
@@ -53,9 +55,23 @@
 	}
 
 	onMount(() => {
-		fetchRooms();
-		lobbyTimer = setInterval(fetchRooms, 3000);
+		localPlayerId = localStorage.getItem('sueca_player_id') || '';
+		if (!localPlayerId) {
+			localPlayerId = Math.random().toString(36).substring(2, 6).toUpperCase();
+			localStorage.setItem('sueca_player_id', localPlayerId);
+		}
+
+		const savedRoom = localStorage.getItem('sueca_room_code');
+		const savedSolo = localStorage.getItem('sueca_is_solo') === 'true';
+
+		if (savedRoom) {
+			connectToTable(savedRoom, savedSolo, false);
+		} else {
+			fetchRooms();
+			lobbyTimer = setInterval(fetchRooms, 3000);
+		}
 	});
+
 	onDestroy(() => {
 		if (lobbyTimer) clearInterval(lobbyTimer);
 	});
@@ -74,14 +90,18 @@
 		currentRoomCode = code.toUpperCase();
 		isSoloMode = solo;
 
+		localStorage.setItem('sueca_room_code', currentRoomCode);
+		localStorage.setItem('sueca_is_solo', isSoloMode.toString());
+
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}${isPrivate ? '?private=true' : ''}`;
+		let wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}?playerId=${localPlayerId}`;
+		if (isPrivate) wsUrl += '&private=true';
 
 		socket = new WebSocket(wsUrl);
 
 		socket.onopen = () => {
 			isConnected = true;
-			if (isSoloMode) {
+			if (isSoloMode && !gameStarted) {
 				setTimeout(() => socket?.send('START_GAME'), 500);
 			}
 		};
@@ -117,7 +137,6 @@
 				errorMessage = data.message;
 				setTimeout(() => (errorMessage = ''), 4000);
 			} else if (data.action === 'GAME_OVER') {
-				// Trigger the beautiful UI modal instead of an alert!
 				gameOverData = data;
 				showGameOverModal = true;
 				gameStarted = false;
@@ -125,7 +144,9 @@
 		};
 
 		socket.onclose = () => {
-			quitRoom();
+			if (document.visibilityState === 'visible') {
+				quitRoom();
+			}
 		};
 	}
 
@@ -145,6 +166,10 @@
 			socket.close();
 			socket = null;
 		}
+
+		localStorage.removeItem('sueca_room_code');
+		localStorage.removeItem('sueca_is_solo');
+
 		isConnected = false;
 		isWaitingForHost = false;
 		gameStarted = false;
