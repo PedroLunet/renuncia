@@ -18,6 +18,9 @@
 	let trumpCard: any = $state(null);
 	let errorMessage = $state('');
 
+	let showGameOverModal = $state(false);
+	let gameOverData: any = $state(null);
+
 	let roomInput = $state('');
 	let currentRoomCode = $state('');
 	let isSoloMode = $state(false);
@@ -89,6 +92,9 @@
 			if (data.action === 'GAME_STATE_UPDATE') {
 				isWaitingForHost = false;
 				gameStarted = data.gameStarted;
+
+				if (gameStarted) showGameOverModal = false;
+
 				ownerId = data.ownerId;
 				myHand = data.myHand;
 				table = data.table;
@@ -111,13 +117,10 @@
 				errorMessage = data.message;
 				setTimeout(() => (errorMessage = ''), 4000);
 			} else if (data.action === 'GAME_OVER') {
-				alert(
-					`Round Over!\nTeam 1: ${data.t1} pts | Team 2: ${data.t2} pts\n\n${data.matchResult}`
-				);
+				// Trigger the beautiful UI modal instead of an alert!
+				gameOverData = data;
+				showGameOverModal = true;
 				gameStarted = false;
-				if (isSoloMode) {
-					setTimeout(() => socket?.send('START_GAME'), 2000);
-				}
 			}
 		};
 
@@ -145,6 +148,8 @@
 		isConnected = false;
 		isWaitingForHost = false;
 		gameStarted = false;
+		showGameOverModal = false;
+		gameOverData = null;
 		myHand = [];
 		table = [];
 		playersList = [];
@@ -520,6 +525,66 @@
 							</div>
 						</button>
 					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if showGameOverModal && gameOverData}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+		>
+			<div
+				class="w-full max-w-md rounded-2xl border-2 border-amber-500 bg-emerald-900 p-8 text-center shadow-[0_0_50px_rgba(251,191,36,0.2)]"
+			>
+				<h2 class="mb-2 text-4xl font-bold text-amber-400">Round Over!</h2>
+
+				<div
+					class="my-8 flex justify-around rounded-xl border border-emerald-800 bg-emerald-950 p-6 shadow-inner"
+				>
+					<div class="flex flex-col items-center">
+						<span class="mb-1 text-xs font-bold tracking-widest text-emerald-400 uppercase"
+							>Team 1</span
+						>
+						<span class="text-4xl font-bold text-amber-400">{gameOverData.t1}</span>
+						<span class="mt-1 text-[10px] text-amber-400/50 uppercase">Points</span>
+					</div>
+					<div class="w-px bg-emerald-800"></div>
+					<div class="flex flex-col items-center">
+						<span class="mb-1 text-xs font-bold tracking-widest text-emerald-400 uppercase"
+							>Team 2</span
+						>
+						<span class="text-4xl font-bold text-white">{gameOverData.t2}</span>
+						<span class="mt-1 text-[10px] text-white/50 uppercase">Points</span>
+					</div>
+				</div>
+
+				<p class="mb-8 text-lg font-bold whitespace-pre-line text-emerald-100">
+					{gameOverData.matchResult}
+				</p>
+
+				<div class="flex flex-col gap-3">
+					{#if ownerId === myPlayerId || isSoloMode}
+						<button
+							onclick={() => socket?.send('START_GAME')}
+							class="w-full rounded-lg bg-amber-500 py-4 font-bold text-emerald-950 shadow-lg transition-transform hover:-translate-y-1 hover:bg-amber-400"
+						>
+							🃏 Play Next Round
+						</button>
+					{:else}
+						<div
+							class="rounded-lg border border-emerald-700 bg-emerald-800/50 py-4 font-bold text-emerald-300 italic"
+						>
+							Waiting for host to continue...
+						</div>
+					{/if}
+
+					<button
+						onclick={quitRoom}
+						class="w-full rounded-lg border border-red-500/30 bg-red-900/20 py-3 text-sm font-bold tracking-widest text-red-400 uppercase transition-colors hover:bg-red-900/50 hover:text-red-300"
+					>
+						Leave Room
+					</button>
 				</div>
 			</div>
 		</div>
