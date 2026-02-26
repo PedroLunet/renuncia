@@ -466,10 +466,12 @@
 						<div
 							class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg border border-neutral-200 bg-white p-2 text-black shadow-xl"
 						>
-							<div class="leading-none font-bold">{getPlayedCard(playerNorth?.id).rank}</div>
-							<div class="text-center text-2xl">
-								{#if getPlayedCard(playerNorth?.id).suit === 'copas'}❤️{:else if getPlayedCard(playerNorth?.id).suit === 'espadas'}♠️{:else if getPlayedCard(playerNorth?.id).suit === 'ouros'}♦️{:else}♣️{/if}
-							</div>
+							<img
+								src="/cards/{getPlayedCard(playerNorth?.id).suit}-{getPlayedCard(playerNorth?.id)
+									.rank}.svg"
+								alt="Played Card"
+								class="h-full w-full object-contain"
+							/>
 						</div>
 					{/if}
 
@@ -477,10 +479,12 @@
 						<div
 							class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg border border-neutral-200 bg-white p-2 text-black shadow-xl"
 						>
-							<div class="leading-none font-bold">{getPlayedCard(playerSouth?.id).rank}</div>
-							<div class="text-center text-2xl">
-								{#if getPlayedCard(playerSouth?.id).suit === 'copas'}❤️{:else if getPlayedCard(playerSouth?.id).suit === 'espadas'}♠️{:else if getPlayedCard(playerSouth?.id).suit === 'ouros'}♦️{:else}♣️{/if}
-							</div>
+							<img
+								src="/cards/{getPlayedCard(playerSouth?.id).suit}-{getPlayedCard(playerSouth?.id)
+									.rank}.svg"
+								alt="Played Card"
+								class="h-full w-full object-contain"
+							/>
 						</div>
 					{/if}
 
@@ -488,10 +492,12 @@
 						<div
 							class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 -rotate-12 flex-col justify-between rounded-lg border border-neutral-200 bg-white p-2 text-black shadow-xl"
 						>
-							<div class="leading-none font-bold">{getPlayedCard(playerWest?.id).rank}</div>
-							<div class="text-center text-2xl">
-								{#if getPlayedCard(playerWest?.id).suit === 'copas'}❤️{:else if getPlayedCard(playerWest?.id).suit === 'espadas'}♠️{:else if getPlayedCard(playerWest?.id).suit === 'ouros'}♦️{:else}♣️{/if}
-							</div>
+							<img
+								src="/cards/{getPlayedCard(playerWest?.id).suit}-{getPlayedCard(playerWest?.id)
+									.rank}.svg"
+								alt="Played Card"
+								class="h-full w-full object-contain"
+							/>
 						</div>
 					{/if}
 
@@ -499,10 +505,12 @@
 						<div
 							class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 rotate-12 flex-col justify-between rounded-lg border border-neutral-200 bg-white p-2 text-black shadow-xl"
 						>
-							<div class="leading-none font-bold">{getPlayedCard(playerEast?.id).rank}</div>
-							<div class="text-center text-2xl">
-								{#if getPlayedCard(playerEast?.id).suit === 'copas'}❤️{:else if getPlayedCard(playerEast?.id).suit === 'espadas'}♠️{:else if getPlayedCard(playerEast?.id).suit === 'ouros'}♦️{:else}♣️{/if}
-							</div>
+							<img
+								src="/cards/{getPlayedCard(playerEast?.id).suit}-{getPlayedCard(playerEast?.id)
+									.rank}.svg"
+								alt="Played Card"
+								class="h-full w-full object-contain"
+							/>
 						</div>
 					{/if}
 				</div>
@@ -540,32 +548,19 @@
 					{#each myHand as card, index}
 						<button
 							onclick={() => playCard(index)}
-							class="group relative flex h-36 w-24 flex-col justify-between rounded-xl border border-neutral-300 bg-white p-2 text-black shadow-xl transition-all duration-300 hover:z-50
+							class="group relative flex h-36 w-24 flex-col justify-between rounded-xl shadow-xl transition-all duration-300 hover:z-50
               {isMyTurn
 								? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
 								: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
 							style="transform: translateY({Math.abs(index - myHand.length / 2) *
 								5}px) rotate({(index - myHand.length / 2) * 3}deg);"
 						>
-							<div
-								class="self-start text-xl leading-none font-bold {card.suit === 'copas' ||
-								card.suit === 'ouros'
-									? 'text-red-600'
-									: 'text-black'}"
-							>
-								{card.rank}
-							</div>
-							<div class="text-center text-4xl">
-								{#if card.suit === 'copas'}❤️{:else if card.suit === 'espadas'}♠️{:else if card.suit === 'ouros'}♦️{:else}♣️{/if}
-							</div>
-							<div
-								class="rotate-180 self-end text-xl leading-none font-bold {card.suit === 'copas' ||
-								card.suit === 'ouros'
-									? 'text-red-600'
-									: 'text-black'}"
-							>
-								{card.rank}
-							</div>
+							<img
+								src="/cards/{card.suit}-{card.rank}.svg"
+								alt="{card.rank} of {card.suit}"
+								class="h-full w-full object-contain drop-shadow-md"
+								draggable="false"
+							/>
 						</button>
 					{/each}
 				</div>
