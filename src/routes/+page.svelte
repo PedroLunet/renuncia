@@ -490,7 +490,7 @@
 
 					{#if getPlayedCard(playerWest?.id)}
 						<div
-							class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 -rotate-12 flex-col justify-between rounded-lg"
+							class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg"
 						>
 							<img
 								src="/cards/{getPlayedCard(playerWest?.id).suit}-{getPlayedCard(playerWest?.id)
@@ -503,7 +503,7 @@
 
 					{#if getPlayedCard(playerEast?.id)}
 						<div
-							class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 rotate-12 flex-col justify-between rounded-lg"
+							class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg"
 						>
 							<img
 								src="/cards/{getPlayedCard(playerEast?.id).suit}-{getPlayedCard(playerEast?.id)
