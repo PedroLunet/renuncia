@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
@@ -45,40 +45,113 @@
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerEast = $derived(playersList[(myIndex + 3) % 4]);
 
+	let isStartOfRound = $derived(
+		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
+	);
+
 	function dealAnimation(
 		node: HTMLElement,
-		{
-			index = 0,
-			playerOffset = 0,
-			isTrunfo = false
-		}: { index?: number; playerOffset?: number; isTrunfo?: boolean }
+		{ index = 0, playerOffset = 0 }: { index: number; playerOffset: number }
 	) {
-		setTimeout(() => {
+		if (!isStartOfRound) {
+			node.style.opacity = '1';
+			return;
+		}
+
+		node.style.opacity = '0';
+
+		tick().then(() => {
 			const deckEl = document.getElementById('deck');
-			if (!deckEl) return;
+			if (!deckEl) {
+				node.style.opacity = '1';
+				return;
+			}
 
 			const deckRect = deckEl.getBoundingClientRect();
 			const cardRect = node.getBoundingClientRect();
-
 			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
 			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
 
-			let delayTime = isTrunfo ? 0 : 0.6 + (playerOffset * 10 + index) * 0.05;
+			if (playerOffset === 0 && index === 9) {
+				gsap.fromTo(
+					node,
+					{ x: deltaX + 80, y: deltaY, scale: 1, rotationY: -90, opacity: 1 },
+					{
+						x: 0,
+						y: 0,
+						scale: 1,
+						rotationY: 0,
+						opacity: 1,
+						duration: 0.4,
+						delay: 2.6,
+						ease: 'back.out(1.2)',
+						onComplete: () => {
+							gsap.set(node, { clearProps: 'all' });
+						}
+					}
+				);
+			} else {
+				let delayTime = 0;
+				if (playerOffset === 0) delayTime = 0.5 + index * 0.05;
+				else if (playerOffset === 1) delayTime = 1.0 + index * 0.05;
+				else if (playerOffset === 2) delayTime = 1.5 + index * 0.05;
+				else if (playerOffset === 3) delayTime = 2.0 + index * 0.05;
 
-			gsap.from(node, {
-				x: deltaX,
-				y: deltaY,
-				scale: 0.2,
-				rotation: Math.random() * 180 - 90,
-				opacity: 0,
-				duration: 0.5,
-				delay: delayTime,
-				ease: 'back.out(1.2)',
-				onComplete: () => {
-					gsap.set(node, { clearProps: 'all' });
-				}
-			});
-		}, 50);
+				gsap.fromTo(
+					node,
+					{ x: deltaX, y: deltaY, scale: 0.2, rotation: Math.random() * 180 - 90 },
+					{
+						x: 0,
+						y: 0,
+						scale: 1,
+						rotation: 0,
+						duration: 0.4,
+						delay: delayTime,
+						ease: 'power2.out',
+						onStart: () => {
+							node.style.opacity = '1';
+						},
+						onComplete: () => {
+							gsap.set(node, { clearProps: 'all' });
+						}
+					}
+				);
+			}
+		});
+
+		return {
+			destroy() {
+				gsap.killTweensOf(node);
+			}
+		};
+	}
+
+	function ghostTrunfoAnim(node: HTMLElement) {
+		if (!isStartOfRound) {
+			node.style.display = 'none';
+			return;
+		}
+
+		const tl = gsap.timeline();
+		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0 });
+		tl.to(node, { x: 80, scale: 1, duration: 0.4, ease: 'power2.out' });
+		tl.to(node, { duration: 2.2 });
+		tl.to(node, { y: 150, opacity: 0, rotationY: 90, duration: 0.4, ease: 'power1.in' });
+
+		return {
+			destroy() {
+				tl.kill();
+			}
+		};
+	}
+
+	function deckAnim(node: HTMLElement) {
+		if (!isStartOfRound) {
+			node.style.opacity = '0';
+			return;
+		}
+		node.style.opacity = '1';
+		gsap.to(node, { opacity: 0, duration: 0.5, delay: 3.2 });
 
 		return {
 			destroy() {
@@ -462,7 +535,7 @@
 
 			{#if trumpCard}
 				<div
-					use:dealAnimation={{ index: 0, playerOffset: 0, isTrunfo: true }}
+					in:fade={{ duration: 500, delay: isStartOfRound ? 3000 : 0 }}
 					class="absolute top-4 right-4 z-20 rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm"
 				>
 					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Trunfo</div>
@@ -522,7 +595,7 @@
 						{#if myHand.length > 0}
 							<div class="ml-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 1 }}>
+									<div use:dealAnimation={{ index, playerOffset: 3 }}>
 										<img
 											src="/cards/back.svg"
 											alt="Card Back"
@@ -540,11 +613,8 @@
 				<div class="relative h-64 w-64 rounded-full border-2 border-dashed border-emerald-600/50">
 					<div
 						id="deck"
-						class="absolute top-1/2 left-1/2 h-24 w-16 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 {myHand.length >
-						0
-							? 'opacity-0'
-							: 'opacity-100'}"
-						style={myHand.length > 0 ? 'transition-delay: 2800ms;' : ''}
+						use:deckAnim
+						class="pointer-events-none absolute top-1/2 left-1/2 z-0 h-24 w-16 -translate-x-1/2 -translate-y-1/2"
 					>
 						<img
 							src="/cards/back.svg"
@@ -559,6 +629,15 @@
 						/>
 						<img src="/cards/back.svg" alt="" class="absolute top-1 left-1 -z-20 h-full w-full" />
 					</div>
+
+					{#if trumpCard}
+						<img
+							use:ghostTrunfoAnim
+							src="/cards/{trumpCard.suit}-{trumpCard.rank}.svg"
+							alt="Trunfo"
+							class="pointer-events-none absolute top-1/2 left-1/2 z-10 h-24 w-16 -translate-x-1/2 -translate-y-1/2 drop-shadow-2xl"
+						/>
+					{/if}
 
 					{#if getPlayedCard(playerNorth?.id)}
 						<div
@@ -626,7 +705,7 @@
 						{#if myHand.length > 0}
 							<div class="mr-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 3 }}>
+									<div use:dealAnimation={{ index, playerOffset: 1 }}>
 										<img
 											src="/cards/back.svg"
 											alt="Card Back"
