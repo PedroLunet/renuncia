@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy, tick } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
@@ -45,8 +45,15 @@
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerEast = $derived(playersList[(myIndex + 3) % 4]);
 
-	function dealAnimation(node: HTMLElement, { index }: { index: number }) {
-		tick().then(() => {
+	function dealAnimation(
+		node: HTMLElement,
+		{
+			index = 0,
+			playerOffset = 0,
+			isTrunfo = false
+		}: { index?: number; playerOffset?: number; isTrunfo?: boolean }
+	) {
+		setTimeout(() => {
 			const deckEl = document.getElementById('deck');
 			if (!deckEl) return;
 
@@ -56,17 +63,22 @@
 			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
 			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
 
+			let delayTime = isTrunfo ? 0 : 0.6 + (playerOffset * 10 + index) * 0.05;
+
 			gsap.from(node, {
 				x: deltaX,
 				y: deltaY,
 				scale: 0.2,
-				rotation: Math.random() * 90 - 45,
+				rotation: Math.random() * 180 - 90,
 				opacity: 0,
 				duration: 0.5,
-				delay: index * 0.05,
-				ease: 'back.out(1.2)'
+				delay: delayTime,
+				ease: 'back.out(1.2)',
+				onComplete: () => {
+					gsap.set(node, { clearProps: 'all' });
+				}
 			});
-		});
+		}, 50);
 
 		return {
 			destroy() {
@@ -450,6 +462,7 @@
 
 			{#if trumpCard}
 				<div
+					use:dealAnimation={{ index: 0, playerOffset: 0, isTrunfo: true }}
 					class="absolute top-4 right-4 z-20 rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm"
 				>
 					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Trunfo</div>
@@ -472,13 +485,14 @@
 						{#if myHand.length > 0}
 							<div class="mb-2 flex -space-x-6">
 								{#each Array(myHand.length) as _, index}
-									<img
-										src="/cards/back.svg"
-										alt="Card Back"
-										use:dealAnimation={{ index }}
-										class="h-auto w-12 drop-shadow-md"
-										draggable="false"
-									/>
+									<div use:dealAnimation={{ index, playerOffset: 2 }}>
+										<img
+											src="/cards/back.svg"
+											alt="Card Back"
+											class="h-auto w-12 drop-shadow-md"
+											draggable="false"
+										/>
+									</div>
 								{/each}
 							</div>
 						{/if}
@@ -508,14 +522,15 @@
 						{#if myHand.length > 0}
 							<div class="ml-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<img
-										src="/cards/back.svg"
-										alt="Card Back"
-										use:dealAnimation={{ index }}
-										class="h-auto w-12 drop-shadow-md"
-										style="transform: rotate(90deg);"
-										draggable="false"
-									/>
+									<div use:dealAnimation={{ index, playerOffset: 1 }}>
+										<img
+											src="/cards/back.svg"
+											alt="Card Back"
+											class="h-auto w-12 drop-shadow-md"
+											style="transform: rotate(90deg);"
+											draggable="false"
+										/>
+									</div>
 								{/each}
 							</div>
 						{/if}
@@ -527,8 +542,9 @@
 						id="deck"
 						class="absolute top-1/2 left-1/2 h-24 w-16 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 {myHand.length >
 						0
-							? 'opacity-0 delay-1000'
+							? 'opacity-0'
 							: 'opacity-100'}"
+						style={myHand.length > 0 ? 'transition-delay: 2800ms;' : ''}
 					>
 						<img
 							src="/cards/back.svg"
@@ -610,14 +626,15 @@
 						{#if myHand.length > 0}
 							<div class="mr-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<img
-										src="/cards/back.svg"
-										alt="Card Back"
-										use:dealAnimation={{ index }}
-										class="h-auto w-12 drop-shadow-md"
-										style="transform: rotate(-90deg);"
-										draggable="false"
-									/>
+									<div use:dealAnimation={{ index, playerOffset: 3 }}>
+										<img
+											src="/cards/back.svg"
+											alt="Card Back"
+											class="h-auto w-12 drop-shadow-md"
+											style="transform: rotate(-90deg);"
+											draggable="false"
+										/>
+									</div>
 								{/each}
 							</div>
 						{/if}
@@ -647,23 +664,24 @@
 
 				<div class="relative flex h-32 w-full max-w-3xl justify-center gap-2">
 					{#each myHand as card, index}
-						<button
-							onclick={() => playCard(index)}
-							use:dealAnimation={{ index }}
-							class="group relative flex h-36 w-24 flex-col justify-between rounded-xl transition-all duration-300 hover:z-50
-              {isMyTurn
-								? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
-								: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
-							style="transform: translateY({Math.abs(index - myHand.length / 2) *
-								5}px) rotate({(index - myHand.length / 2) * 3}deg);"
-						>
-							<img
-								src="/cards/{card.suit}-{card.rank}.svg"
-								alt="{card.rank} of {card.suit}"
-								class="h-full w-full object-contain drop-shadow-md"
-								draggable="false"
-							/>
-						</button>
+						<div use:dealAnimation={{ index, playerOffset: 0 }} class="h-36 w-24">
+							<button
+								onclick={() => playCard(index)}
+								class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-300 hover:z-50
+                {isMyTurn
+									? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
+									: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
+								style="transform: translateY({Math.abs(index - myHand.length / 2) *
+									5}px) rotate({(index - myHand.length / 2) * 3}deg);"
+							>
+								<img
+									src="/cards/{card.suit}-{card.rank}.svg"
+									alt="{card.rank} of {card.suit}"
+									class="h-full w-full object-contain drop-shadow-md"
+									draggable="false"
+								/>
+							</button>
+						</div>
 					{/each}
 				</div>
 			</div>
