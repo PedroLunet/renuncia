@@ -291,7 +291,7 @@ export class GameRoom extends DurableObject {
 				}
 
 				this.gameStarted = true;
-				this.firstPlayerIndex = (this.dealerIndex - 1 + 4) % 4;
+				this.firstPlayerIndex = (this.dealerIndex + 1) % 4;
 				this.currentTurnIndex = this.firstPlayerIndex;
 
 				this.currentTrick = [];
@@ -301,7 +301,10 @@ export class GameRoom extends DurableObject {
 				await this.saveState();
 				this.ctx.waitUntil(this.reportToLobby());
 				this.broadcastGameState();
-				this.processTurn();
+				setTimeout(() => {
+					this.processTurn();
+				}, 3200);
+
 				return;
 			}
 
@@ -431,7 +434,7 @@ export class GameRoom extends DurableObject {
 						this.team2MatchPoints = 0;
 					}
 
-					this.dealerIndex = (this.dealerIndex - 1 + 4) % 4;
+					this.dealerIndex = (this.dealerIndex + 1) % 4;
 
 					await this.saveState();
 					this.ctx.waitUntil(this.reportToLobby());
