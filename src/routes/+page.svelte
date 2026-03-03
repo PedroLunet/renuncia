@@ -832,9 +832,12 @@
 					{#if ownerId === myPlayerId || isSoloMode}
 						<button
 							onclick={() => socket?.send('START_GAME')}
-							class="w-full rounded-lg bg-amber-500 py-4 font-bold text-emerald-950 shadow-lg transition-transform hover:-translate-y-1 hover:bg-amber-400"
+							class="w-full rounded-lg py-4 font-bold shadow-lg transition-transform hover:-translate-y-1
+              {gameOverData.isMatchOver
+								? 'bg-indigo-600 text-white hover:bg-indigo-500'
+								: 'bg-amber-500 text-emerald-950 hover:bg-amber-400'}"
 						>
-							🃏 Play Next Round
+							{gameOverData.isMatchOver ? '🏆 Play New Match' : '🃏 Play Next Round'}
 						</button>
 					{:else}
 						<div
@@ -846,9 +849,12 @@
 
 					<button
 						onclick={quitRoom}
-						class="w-full rounded-lg border border-red-500/30 bg-red-900/20 py-3 text-sm font-bold tracking-widest text-red-400 uppercase transition-colors hover:bg-red-900/50 hover:text-red-300"
+						class="w-full rounded-lg border py-3 text-sm font-bold tracking-widest uppercase transition-colors
+            {gameOverData.isMatchOver
+							? 'border-emerald-500/50 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-800 hover:text-white'
+							: 'border-red-500/30 bg-red-900/20 text-red-400 hover:bg-red-900/50 hover:text-red-300'}"
 					>
-						Leave Room
+						{gameOverData.isMatchOver ? '🏠 Return to Home' : 'Leave Room'}
 					</button>
 				</div>
 			</div>
