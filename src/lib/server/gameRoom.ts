@@ -421,6 +421,7 @@ export class GameRoom extends DurableObject {
 				if (this.hands[this.players[0].id].length === 0) {
 					this.gameStarted = false;
 					let matchResult = '';
+					let isMatchOver = false;
 
 					if (this.team1Points > 60) {
 						const pts = this.team1Points === 120 ? 4 : this.team1Points > 90 ? 2 : 1;
@@ -438,10 +439,12 @@ export class GameRoom extends DurableObject {
 						matchResult += '\n\n🏆 TEAM 1 WINS THE ENTIRE MATCH! 🏆';
 						this.team1MatchPoints = 0;
 						this.team2MatchPoints = 0;
+						isMatchOver = true;
 					} else if (this.team2MatchPoints >= 4) {
 						matchResult += '\n\n🏆 TEAM 2 WINS THE ENTIRE MATCH! 🏆';
 						this.team1MatchPoints = 0;
 						this.team2MatchPoints = 0;
+						isMatchOver = true;
 					}
 
 					this.dealerIndex = (this.dealerIndex + 1) % 4;
@@ -452,7 +455,8 @@ export class GameRoom extends DurableObject {
 						action: 'GAME_OVER',
 						t1: this.team1Points,
 						t2: this.team2Points,
-						matchResult
+						matchResult,
+						isMatchOver
 					});
 					return;
 				}
