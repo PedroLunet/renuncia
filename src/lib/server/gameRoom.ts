@@ -33,6 +33,8 @@ export class GameRoom extends DurableObject {
 
 	currentTurnIndex: number = 0;
 	currentTrick: PlayedCard[] = [];
+	dealerIndex: number = 0;
+	firstPlayerIndex: number = 0;
 
 	team1Points: number = 0;
 	team2Points: number = 0;
@@ -59,6 +61,8 @@ export class GameRoom extends DurableObject {
 				this.gameStarted = stored.gameStarted || false;
 				this.currentTurnIndex = stored.currentTurnIndex || 0;
 				this.currentTrick = stored.currentTrick || [];
+				this.dealerIndex = stored.dealerIndex || 0;
+				this.firstPlayerIndex = stored.firstPlayerIndex || 0;
 				this.team1Points = stored.team1Points || 0;
 				this.team2Points = stored.team2Points || 0;
 				this.team1MatchPoints = stored.team1MatchPoints || 0;
@@ -80,6 +84,8 @@ export class GameRoom extends DurableObject {
 			gameStarted: this.gameStarted,
 			currentTurnIndex: this.currentTurnIndex,
 			currentTrick: this.currentTrick,
+			dealerIndex: this.dealerIndex,
+			firstPlayerIndex: this.firstPlayerIndex,
 			team1Points: this.team1Points,
 			team2Points: this.team2Points,
 			team1MatchPoints: this.team1MatchPoints,
@@ -260,14 +266,34 @@ export class GameRoom extends DurableObject {
 
 				this.deck = this.generateDeck();
 				this.shuffleDeck(this.deck);
-				this.trumpCard = this.deck[this.deck.length - 1];
+
+				this.trumpCard = this.deck[39];
 
 				for (let i = 0; i < 4; i++) {
 					this.hands[this.players[i].id] = this.deck.slice(i * 10, i * 10 + 10);
 				}
 
+				const dealerId = this.players[this.dealerIndex].id;
+				for (let i = 0; i < 4; i++) {
+					const playerHand = this.hands[this.players[i].id];
+					const trunfoIndex = playerHand.findIndex(
+						(c) => c.suit === this.trumpCard!.suit && c.rank === this.trumpCard!.rank
+					);
+					if (trunfoIndex !== -1) {
+						playerHand.splice(trunfoIndex, 1);
+						this.hands[dealerId].push(this.trumpCard);
+						if (i !== this.dealerIndex) {
+							const swappedCard = this.hands[dealerId].shift()!;
+							playerHand.push(swappedCard);
+						}
+						break;
+					}
+				}
+
 				this.gameStarted = true;
-				this.currentTurnIndex = 0;
+				this.firstPlayerIndex = (this.dealerIndex - 1 + 4) % 4;
+				this.currentTurnIndex = this.firstPlayerIndex;
+
 				this.currentTrick = [];
 				this.team1Points = 0;
 				this.team2Points = 0;
@@ -405,6 +431,8 @@ export class GameRoom extends DurableObject {
 						this.team2MatchPoints = 0;
 					}
 
+					this.dealerIndex = (this.dealerIndex - 1 + 4) % 4;
+
 					await this.saveState();
 					this.ctx.waitUntil(this.reportToLobby());
 					this.broadcast({
@@ -494,6 +522,7 @@ export class GameRoom extends DurableObject {
 					ownerId: this.ownerId,
 					players: this.players,
 					activePlayerId: this.players[this.currentTurnIndex]?.id,
+					dealerId: this.players[this.dealerIndex]?.id,
 					table: this.currentTrick,
 					myHand: this.hands[playerId] || [],
 					myPlayerId: playerId,
