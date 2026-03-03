@@ -273,6 +273,15 @@ export class GameRoom extends DurableObject {
 					this.hands[this.players[i].id] = this.deck.slice(i * 10, i * 10 + 10);
 				}
 
+				if (
+					this.team1Points === 0 &&
+					this.team2Points === 0 &&
+					this.team1MatchPoints === 0 &&
+					this.team2MatchPoints === 0
+				) {
+					this.dealerIndex = Math.floor(Math.random() * 4);
+				}
+
 				const dealerId = this.players[this.dealerIndex].id;
 				for (let i = 0; i < 4; i++) {
 					const playerHand = this.hands[this.players[i].id];
@@ -301,6 +310,7 @@ export class GameRoom extends DurableObject {
 				await this.saveState();
 				this.ctx.waitUntil(this.reportToLobby());
 				this.broadcastGameState();
+
 				setTimeout(() => {
 					this.processTurn();
 				}, 3200);
