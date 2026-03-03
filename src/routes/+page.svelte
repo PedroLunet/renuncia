@@ -13,6 +13,7 @@
 	let activePlayerId = $state('');
 	let myPlayerId = $state('');
 	let ownerId = $state('');
+	let dealerId = $state('');
 	let gameStarted = $state(false);
 	let team1Points = $state(0);
 	let team2Points = $state(0);
@@ -46,7 +47,11 @@
 	let playerEast = $derived(playersList[(myIndex + 3) % 4]);
 
 	let isStartOfRound = $derived(
-		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
+		myHand.length === 10 &&
+			table.length === 0 &&
+			team1Points === 0 &&
+			team2Points === 0 &&
+			!gameOverData
 	);
 
 	function dealAnimation(
@@ -72,30 +77,34 @@
 			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
 			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
 
-			if (playerOffset === 0 && index === 9) {
+			const dIndex = playersList.findIndex((p) => p.id === dealerId);
+			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
+
+			const isDealer = playerOffset === dOffset;
+			const dealTurn = (dOffset - playerOffset - 1 + 4) % 4;
+
+			if (isDealer && index === 9) {
 				gsap.fromTo(
 					node,
-					{ x: deltaX + 80, y: deltaY, scale: 1, rotationY: -90, opacity: 1 },
+					{ x: deltaX + 80, y: deltaY, scale: 1, rotationY: playerOffset === 0 ? 0 : 90 },
 					{
 						x: 0,
 						y: 0,
 						scale: 1,
 						rotationY: 0,
-						opacity: 1,
 						duration: 0.4,
-						delay: 2.6,
+						delay: playerOffset === 0 ? 2.6 : 2.8,
 						ease: 'back.out(1.2)',
+						onStart: () => {
+							node.style.opacity = '1';
+						},
 						onComplete: () => {
 							gsap.set(node, { clearProps: 'all' });
 						}
 					}
 				);
 			} else {
-				let delayTime = 0;
-				if (playerOffset === 0) delayTime = 0.5 + index * 0.05;
-				else if (playerOffset === 1) delayTime = 1.0 + index * 0.05;
-				else if (playerOffset === 2) delayTime = 1.5 + index * 0.05;
-				else if (playerOffset === 3) delayTime = 2.0 + index * 0.05;
+				let delayTime = 0.5 + (dealTurn * 10 + index) * 0.05;
 
 				gsap.fromTo(
 					node,
@@ -132,11 +141,20 @@
 			return;
 		}
 
+		const dIndex = playersList.findIndex((p) => p.id === dealerId);
+		const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
+
 		const tl = gsap.timeline();
-		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0 });
+		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0, rotationY: 0 });
 		tl.to(node, { x: 80, scale: 1, duration: 0.4, ease: 'power2.out' });
 		tl.to(node, { duration: 2.2 });
-		tl.to(node, { y: 150, opacity: 0, rotationY: 90, duration: 0.4, ease: 'power1.in' });
+
+		if (dOffset === 0) {
+			tl.to(node, { opacity: 0, duration: 0 });
+		} else {
+			tl.to(node, { rotationY: -90, duration: 0.2, ease: 'power1.inOut' });
+			tl.to(node, { opacity: 0, duration: 0 });
+		}
 
 		return {
 			destroy() {
@@ -151,7 +169,7 @@
 			return;
 		}
 		node.style.opacity = '1';
-		gsap.to(node, { opacity: 0, duration: 0.5, delay: 3.2 });
+		gsap.to(node, { opacity: 0, duration: 0.5, delay: 3.0 });
 
 		return {
 			destroy() {
@@ -238,6 +256,7 @@
 				table = data.table;
 				playersList = data.players;
 				activePlayerId = data.activePlayerId;
+				dealerId = data.dealerId;
 				myPlayerId = data.myPlayerId;
 				team1Points = data.team1Points;
 				team2Points = data.team2Points;
@@ -307,6 +326,7 @@
 		activePlayerId = '';
 		myPlayerId = '';
 		ownerId = '';
+		dealerId = '';
 
 		setTimeout(fetchRooms, 200);
 	}
@@ -535,7 +555,7 @@
 
 			{#if trumpCard}
 				<div
-					in:fade={{ duration: 500, delay: isStartOfRound ? 3000 : 0 }}
+					in:fade={{ duration: 500, delay: isStartOfRound ? 3200 : 0 }}
 					class="absolute top-4 right-4 z-20 rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm"
 				>
 					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Trunfo</div>
@@ -570,9 +590,13 @@
 							</div>
 						{/if}
 						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
+							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
+							playerNorth.id
+								? 'border-amber-400 text-amber-400'
+								: ''}"
 						>
-							{playerNorth.id} (Partner) {ownerId === playerNorth.id && !isSoloMode ? '👑' : ''}
+							{playerNorth.id} (Partner) {dealerId === playerNorth.id ? '🃏' : ''}
+							{ownerId === playerNorth.id && !isSoloMode ? '👑' : ''}
 						</div>
 					</div>
 				{/if}
@@ -586,16 +610,20 @@
 							: 'opacity-70'}"
 					>
 						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
+							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
+							playerWest.id
+								? 'border-amber-400 text-amber-400'
+								: ''}"
 							style="transform: rotate(-90deg);"
 						>
 							{playerWest.id}
+							{dealerId === playerWest.id ? '🃏' : ''}
 							{ownerId === playerWest.id && !isSoloMode ? '👑' : ''}
 						</div>
 						{#if myHand.length > 0}
 							<div class="ml-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 3 }}>
+									<div use:dealAnimation={{ index, playerOffset: 1 }}>
 										<img
 											src="/cards/back.svg"
 											alt="Card Back"
@@ -705,7 +733,7 @@
 						{#if myHand.length > 0}
 							<div class="mr-2 flex flex-col -space-y-8">
 								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 1 }}>
+									<div use:dealAnimation={{ index, playerOffset: 3 }}>
 										<img
 											src="/cards/back.svg"
 											alt="Card Back"
@@ -718,10 +746,14 @@
 							</div>
 						{/if}
 						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow"
+							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
+							playerEast.id
+								? 'border-amber-400 text-amber-400'
+								: ''}"
 							style="transform: rotate(90deg);"
 						>
 							{playerEast.id}
+							{dealerId === playerEast.id ? '🃏' : ''}
 							{ownerId === playerEast.id && !isSoloMode ? '👑' : ''}
 						</div>
 					</div>
