@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy, tick } from 'svelte';
-	import { fly, fade } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
-	import gsap from 'gsap';
+	import { onMount, onDestroy } from 'svelte';
+	import Lobby from './lobby.svelte';
+	import Table from './table.svelte';
 
 	let socket: WebSocket | null = null;
 
@@ -30,161 +29,15 @@
 	let isSoloMode = $state(false);
 	let openRooms: any[] = $state([]);
 	let lobbyTimer: ReturnType<typeof setInterval>;
-
 	let isWaitingForHost = $state(false);
 	let approvalRequests: string[] = $state([]);
-
 	let localPlayerId = '';
-
-	let isMyTurn = $derived(
-		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
-	);
-
-	let myIndex = $derived(playersList.findIndex((p) => p.id === myPlayerId));
-	let playerSouth = $derived(playersList[myIndex]);
-	let playerEast = $derived(playersList[(myIndex + 1) % 4]);
-	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
-	let playerWest = $derived(playersList[(myIndex + 3) % 4]);
-
-	let isStartOfRound = $derived(
-		myHand.length === 10 &&
-			table.length === 0 &&
-			team1Points === 0 &&
-			team2Points === 0 &&
-			!gameOverData
-	);
-
-	function dealAnimation(
-		node: HTMLElement,
-		{ index = 0, playerOffset = 0 }: { index: number; playerOffset: number }
-	) {
-		if (!isStartOfRound) {
-			node.style.opacity = '1';
-			return;
-		}
-
-		node.style.opacity = '0';
-
-		tick().then(() => {
-			const deckEl = document.getElementById('deck');
-			if (!deckEl) {
-				node.style.opacity = '1';
-				return;
-			}
-
-			const deckRect = deckEl.getBoundingClientRect();
-			const cardRect = node.getBoundingClientRect();
-			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
-			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
-
-			const dIndex = playersList.findIndex((p) => p.id === dealerId);
-			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
-
-			const isDealer = playerOffset === dOffset;
-			const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
-
-			if (isDealer && index === 9) {
-				gsap.fromTo(
-					node,
-					{ x: deltaX + 80, y: deltaY, scale: 1, rotationY: playerOffset === 0 ? 0 : 90 },
-					{
-						x: 0,
-						y: 0,
-						scale: 1,
-						rotationY: 0,
-						duration: 0.4,
-						delay: playerOffset === 0 ? 2.6 : 2.8,
-						ease: 'back.out(1.2)',
-						onStart: () => {
-							node.style.opacity = '1';
-						},
-						onComplete: () => {
-							gsap.set(node, { clearProps: 'all' });
-						}
-					}
-				);
-			} else {
-				let delayTime = 0.5 + (dealTurn * 10 + index) * 0.05;
-
-				gsap.fromTo(
-					node,
-					{ x: deltaX, y: deltaY, scale: 0.2, rotation: Math.random() * 180 - 90 },
-					{
-						x: 0,
-						y: 0,
-						scale: 1,
-						rotation: 0,
-						duration: 0.4,
-						delay: delayTime,
-						ease: 'power2.out',
-						onStart: () => {
-							node.style.opacity = '1';
-						},
-						onComplete: () => {
-							gsap.set(node, { clearProps: 'all' });
-						}
-					}
-				);
-			}
-		});
-
-		return {
-			destroy() {
-				gsap.killTweensOf(node);
-			}
-		};
-	}
-
-	function ghostTrunfoAnim(node: HTMLElement) {
-		if (!isStartOfRound) {
-			node.style.display = 'none';
-			return;
-		}
-
-		const dIndex = playersList.findIndex((p) => p.id === dealerId);
-		const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
-
-		const tl = gsap.timeline();
-		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0, rotationY: 0 });
-		tl.to(node, { x: 80, scale: 1, duration: 0.4, ease: 'power2.out' });
-		tl.to(node, { duration: 2.2 });
-
-		if (dOffset === 0) {
-			tl.to(node, { opacity: 0, duration: 0 });
-		} else {
-			tl.to(node, { rotationY: -90, duration: 0.2, ease: 'power1.inOut' });
-			tl.to(node, { opacity: 0, duration: 0 });
-		}
-
-		return {
-			destroy() {
-				tl.kill();
-			}
-		};
-	}
-
-	function deckAnim(node: HTMLElement) {
-		if (!isStartOfRound) {
-			node.style.opacity = '0';
-			return;
-		}
-		node.style.opacity = '1';
-		gsap.to(node, { opacity: 0, duration: 0.5, delay: 3.0 });
-
-		return {
-			destroy() {
-				gsap.killTweensOf(node);
-			}
-		};
-	}
 
 	async function fetchRooms() {
 		if (isConnected) return;
 		try {
 			const res = await fetch('/api/lobby');
-			if (res.ok) {
-				openRooms = await res.json();
-			}
+			if (res.ok) openRooms = await res.json();
 		} catch (e) {
 			console.error('Failed to fetch lobby');
 		}
@@ -196,10 +49,8 @@
 			localPlayerId = Math.random().toString(36).substring(2, 6).toUpperCase();
 			localStorage.setItem('sueca_player_id', localPlayerId);
 		}
-
 		const savedRoom = localStorage.getItem('sueca_room_code');
 		const savedSolo = localStorage.getItem('sueca_is_solo') === 'true';
-
 		if (savedRoom) {
 			connectToTable(savedRoom, savedSolo, false);
 		} else {
@@ -211,15 +62,6 @@
 	onDestroy(() => {
 		if (lobbyTimer) clearInterval(lobbyTimer);
 	});
-
-	function getPlayedCard(playerId: string | undefined) {
-		if (!playerId) return null;
-		return table.find((play) => play.playerId === playerId)?.card;
-	}
-
-	function generateRoomCode() {
-		return Math.random().toString(36).substring(2, 6).toUpperCase();
-	}
 
 	function connectToTable(code: string, solo: boolean = false, isPrivate: boolean = false) {
 		if (!code) return;
@@ -237,18 +79,14 @@
 
 		socket.onopen = () => {
 			isConnected = true;
-			if (isSoloMode && !gameStarted) {
-				socket?.send('START_GAME');
-			}
+			if (isSoloMode && !gameStarted) socket?.send('START_GAME');
 		};
 
 		socket.onmessage = (event) => {
 			const data = JSON.parse(event.data);
-
 			if (data.action === 'GAME_STATE_UPDATE') {
 				isWaitingForHost = false;
 				gameStarted = data.gameStarted;
-
 				if (gameStarted) {
 					showGameOverModal = false;
 					gameOverData = null;
@@ -284,9 +122,7 @@
 		};
 
 		socket.onclose = () => {
-			if (document.visibilityState === 'visible') {
-				quitRoom();
-			}
+			if (document.visibilityState === 'visible') quitRoom();
 		};
 	}
 
@@ -302,17 +138,13 @@
 
 	function quitRoom() {
 		if (socket) {
-			if (socket.readyState === WebSocket.OPEN) {
-				socket.send('LEAVE_ROOM');
-			}
-
+			if (socket.readyState === WebSocket.OPEN) socket.send('LEAVE_ROOM');
 			socket.onclose = null;
 			setTimeout(() => {
 				if (socket) socket.close();
 				socket = null;
 			}, 50);
 		}
-
 		localStorage.removeItem('sueca_room_code');
 		localStorage.removeItem('sueca_is_solo');
 
@@ -330,7 +162,6 @@
 		myPlayerId = '';
 		ownerId = '';
 		dealerId = '';
-
 		setTimeout(fetchRooms, 200);
 	}
 </script>
@@ -347,95 +178,7 @@
 	{/if}
 
 	{#if !isConnected}
-		<div class="w-full max-w-lg rounded-xl border border-emerald-700 bg-emerald-800 p-8 shadow-2xl">
-			<h1 class="mb-8 text-center text-4xl font-bold text-amber-400">Sueca Online</h1>
-
-			<div class="space-y-6">
-				<button
-					onclick={() => connectToTable(`SOLO_${localPlayerId}`, true, false)}
-					class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
-				>
-					👤 Solo Match
-				</button>
-
-				<div class="flex gap-4">
-					<button
-						onclick={() => connectToTable(generateRoomCode(), false, false)}
-						class="flex-1 rounded-lg bg-emerald-600 py-3 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
-					>
-						➕ Public Room
-					</button>
-					<button
-						onclick={() => connectToTable(generateRoomCode(), false, true)}
-						class="flex-1 rounded-lg border-2 border-amber-500 bg-emerald-800 py-3 font-bold text-amber-500 shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-700"
-					>
-						🔒 Private Room
-					</button>
-				</div>
-
-				<div class="rounded-xl border border-emerald-700 bg-emerald-950/50 p-6">
-					<div class="mb-4 flex items-center justify-between">
-						<h2 class="text-xl font-bold text-emerald-300">Open Rooms</h2>
-						<button
-							onclick={fetchRooms}
-							class="text-xs font-bold tracking-wider text-emerald-400 uppercase hover:text-white"
-							>🔄 Refresh</button
-						>
-					</div>
-
-					<div class="custom-scrollbar max-h-48 space-y-2 overflow-y-auto pr-2">
-						{#if openRooms.length === 0}
-							<div class="py-6 text-center text-sm font-bold text-emerald-700">
-								No rooms active right now.
-							</div>
-						{:else}
-							{#each openRooms as room}
-								<div
-									class="flex items-center justify-between rounded-lg border border-emerald-800 bg-emerald-900 p-3 shadow-sm transition-colors hover:border-emerald-600"
-								>
-									<div>
-										<div class="font-mono text-lg font-bold text-amber-400">
-											{room.code}
-											{#if room.isPrivate}<span class="text-sm">🔒</span>{/if}
-										</div>
-										<div
-											class="text-xs font-bold tracking-widest uppercase {room.status === 'playing'
-												? 'text-red-400'
-												: 'text-emerald-400'}"
-										>
-											{room.status === 'playing' ? 'In Progress' : 'Waiting'} • {room.playerCount}/4
-										</div>
-									</div>
-									<button
-										onclick={() => connectToTable(room.code, false, false)}
-										disabled={room.playerCount >= 4 || room.status === 'playing'}
-										class="rounded-lg bg-amber-500 px-6 py-2 font-bold text-emerald-950 shadow-md transition-transform hover:-translate-y-0.5 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0"
-									>
-										Join
-									</button>
-								</div>
-							{/each}
-						{/if}
-					</div>
-				</div>
-
-				<div class="flex gap-2">
-					<input
-						type="text"
-						bind:value={roomInput}
-						placeholder="ABCD"
-						maxlength="4"
-						class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 text-center font-mono text-xl font-bold text-white uppercase placeholder-emerald-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-					/>
-					<button
-						onclick={() => connectToTable(roomInput, false, false)}
-						disabled={roomInput.length < 4}
-						class="rounded-lg bg-emerald-700 px-8 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-						>Join</button
-					>
-				</div>
-			</div>
-		</div>
+		<Lobby {localPlayerId} {openRooms} bind:roomInput {connectToTable} {fetchRooms} />
 	{:else if isWaitingForHost}
 		<div
 			class="w-full max-w-md rounded-xl border border-amber-600 bg-emerald-800 p-8 text-center shadow-2xl"
@@ -465,14 +208,12 @@
 					{#if ownerId === myPlayerId}👑 You are the Host!{:else}Waiting for players...{/if}
 				</h1>
 				<p class="mb-8 text-emerald-200">Players in room: {playersList.length}/4</p>
-
 				<div class="mb-6 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
 					<div class="mb-2 text-sm tracking-widest text-emerald-400 uppercase">Room Code</div>
 					<div class="font-mono text-5xl font-bold tracking-widest text-white">
 						{currentRoomCode}
 					</div>
 				</div>
-
 				{#if ownerId === myPlayerId && approvalRequests.length > 0}
 					<div class="mb-6 rounded-lg border-2 border-amber-500 bg-emerald-900 p-4">
 						<h3 class="mb-3 text-sm font-bold tracking-widest text-amber-400 uppercase">
@@ -501,7 +242,6 @@
 						</div>
 					</div>
 				{/if}
-
 				{#if ownerId === myPlayerId}
 					<button
 						onclick={() => socket?.send('START_GAME')}
@@ -511,7 +251,6 @@
 				{:else}
 					<div class="py-4 text-emerald-400 italic">Waiting for host to start the game...</div>
 				{/if}
-
 				<button
 					onclick={quitRoom}
 					class="mt-6 text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
@@ -520,279 +259,24 @@
 			</div>
 		{/if}
 	{:else}
-		<div
-			class="relative flex h-[90vh] w-full max-w-5xl flex-col justify-between overflow-hidden rounded-3xl border-8 border-emerald-950 bg-emerald-800 p-4 shadow-2xl"
-		>
-			<div class="absolute top-4 left-4 z-20 flex gap-4">
-				<div class="rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm">
-					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Team 1 (N/S)</div>
-					<div class="text-xl font-bold text-amber-400">{team1Points} pts</div>
-					<div class="text-xs text-amber-400/70">{team1MatchPoints} Sets</div>
-				</div>
-				<div class="rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm">
-					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Team 2 (E/W)</div>
-					<div class="text-xl font-bold text-white">{team2Points} pts</div>
-					<div class="text-xs text-white/70">{team2MatchPoints} Sets</div>
-				</div>
-			</div>
-
-			<div class="absolute bottom-4 left-4 z-20 flex flex-col gap-2">
-				{#if !isSoloMode}
-					<div class="font-mono text-xs font-bold tracking-widest text-emerald-400/50 uppercase">
-						Room: {currentRoomCode}
-					</div>
-				{/if}
-				<button
-					onclick={quitRoom}
-					class="text-left text-xs font-bold tracking-widest text-red-400/60 uppercase hover:text-red-400"
-					>Quit Match</button
-				>
-			</div>
-
-			{#if trumpCard}
-				<div
-					in:fade={{ duration: 500, delay: isStartOfRound ? 3200 : 0 }}
-					class="absolute top-4 right-4 z-20 rounded-lg border border-white/10 bg-black/40 p-3 text-center backdrop-blur-sm"
-				>
-					<div class="text-[10px] tracking-widest text-emerald-300 uppercase">Trunfo</div>
-					<div class="flex items-center gap-2 text-xl font-bold">
-						{trumpCard.rank}
-						<span class="text-2xl">
-							{#if trumpCard.suit === 'copas'}❤️{:else if trumpCard.suit === 'espadas'}♠️{:else if trumpCard.suit === 'ouros'}♦️{:else}♣️{/if}
-						</span>
-					</div>
-				</div>
-			{/if}
-
-			<div class="flex h-20 w-full items-center justify-center pt-4">
-				{#if playerNorth}
-					<div
-						class="flex flex-col items-center transition-all {activePlayerId === playerNorth.id
-							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
-							: 'opacity-70'}"
-					>
-						{#if myHand.length > 0}
-							<div class="mb-2 flex -space-x-6">
-								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 2 }}>
-										<img
-											src="/cards/back.svg"
-											alt="Card Back"
-											class="h-auto w-12 drop-shadow-md"
-											draggable="false"
-										/>
-									</div>
-								{/each}
-							</div>
-						{/if}
-						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
-							playerNorth.id
-								? 'border-amber-400 text-amber-400'
-								: ''}"
-						>
-							{playerNorth.id} (Partner) {dealerId === playerNorth.id ? '🃏' : ''}
-							{ownerId === playerNorth.id && !isSoloMode ? '👑' : ''}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="flex flex-1 items-center justify-between px-4">
-				{#if playerWest}
-					<div
-						class="flex flex-row items-center transition-all {activePlayerId === playerWest.id
-							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
-							: 'opacity-70'}"
-					>
-						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
-							playerWest.id
-								? 'border-amber-400 text-amber-400'
-								: ''}"
-							style="transform: rotate(-90deg);"
-						>
-							{playerWest.id}
-							{dealerId === playerWest.id ? '🃏' : ''}
-							{ownerId === playerWest.id && !isSoloMode ? '👑' : ''}
-						</div>
-						{#if myHand.length > 0}
-							<div class="ml-2 flex flex-col -space-y-8">
-								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 3 }}>
-										<img
-											src="/cards/back.svg"
-											alt="Card Back"
-											class="h-auto w-12 drop-shadow-md"
-											style="transform: rotate(90deg);"
-											draggable="false"
-										/>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				{/if}
-
-				<div class="relative h-64 w-64 rounded-full border-2 border-dashed border-emerald-600/50">
-					<div
-						id="deck"
-						use:deckAnim
-						class="pointer-events-none absolute top-1/2 left-1/2 z-0 h-24 w-16 -translate-x-1/2 -translate-y-1/2"
-					>
-						<img
-							src="/cards/back.svg"
-							alt="Deck"
-							class="h-full w-full drop-shadow-2xl"
-							draggable="false"
-						/>
-						<img
-							src="/cards/back.svg"
-							alt=""
-							class="absolute top-0.5 left-0.5 -z-10 h-full w-full"
-						/>
-						<img src="/cards/back.svg" alt="" class="absolute top-1 left-1 -z-20 h-full w-full" />
-					</div>
-
-					{#if trumpCard}
-						<img
-							use:ghostTrunfoAnim
-							src="/cards/{trumpCard.suit}-{trumpCard.rank}.svg"
-							alt="Trunfo"
-							class="pointer-events-none absolute top-1/2 left-1/2 z-10 h-24 w-16 -translate-x-1/2 -translate-y-1/2 drop-shadow-2xl"
-						/>
-					{/if}
-
-					{#if getPlayedCard(playerNorth?.id)}
-						<div
-							in:fly={{ y: -100, duration: 300, easing: cubicOut }}
-							class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
-						>
-							<img
-								src="/cards/{getPlayedCard(playerNorth?.id).suit}-{getPlayedCard(playerNorth?.id)
-									.rank}.svg"
-								alt="Played Card"
-								class="h-full w-full object-contain"
-							/>
-						</div>
-					{/if}
-
-					{#if getPlayedCard(playerSouth?.id)}
-						<div
-							in:fly={{ y: 100, duration: 300, easing: cubicOut }}
-							class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
-						>
-							<img
-								src="/cards/{getPlayedCard(playerSouth?.id).suit}-{getPlayedCard(playerSouth?.id)
-									.rank}.svg"
-								alt="Played Card"
-								class="h-full w-full object-contain"
-							/>
-						</div>
-					{/if}
-
-					{#if getPlayedCard(playerWest?.id)}
-						<div
-							in:fly={{ x: -100, duration: 300, easing: cubicOut }}
-							class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg"
-						>
-							<img
-								src="/cards/{getPlayedCard(playerWest?.id).suit}-{getPlayedCard(playerWest?.id)
-									.rank}.svg"
-								alt="Played Card"
-								class="h-full w-full object-contain"
-							/>
-						</div>
-					{/if}
-
-					{#if getPlayedCard(playerEast?.id)}
-						<div
-							in:fly={{ x: 100, duration: 300, easing: cubicOut }}
-							class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg"
-						>
-							<img
-								src="/cards/{getPlayedCard(playerEast?.id).suit}-{getPlayedCard(playerEast?.id)
-									.rank}.svg"
-								alt="Played Card"
-								class="h-full w-full object-contain"
-							/>
-						</div>
-					{/if}
-				</div>
-
-				{#if playerEast}
-					<div
-						class="flex flex-row items-center transition-all {activePlayerId === playerEast.id
-							? 'scale-110 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]'
-							: 'opacity-70'}"
-					>
-						{#if myHand.length > 0}
-							<div class="mr-2 flex flex-col -space-y-8">
-								{#each Array(myHand.length) as _, index}
-									<div use:dealAnimation={{ index, playerOffset: 1 }}>
-										<img
-											src="/cards/back.svg"
-											alt="Card Back"
-											class="h-auto w-12 drop-shadow-md"
-											style="transform: rotate(-90deg);"
-											draggable="false"
-										/>
-									</div>
-								{/each}
-							</div>
-						{/if}
-						<div
-							class="rounded-full border border-emerald-700 bg-emerald-950 px-4 py-1 text-sm font-bold shadow {dealerId ===
-							playerEast.id
-								? 'border-amber-400 text-amber-400'
-								: ''}"
-							style="transform: rotate(90deg);"
-						>
-							{playerEast.id}
-							{dealerId === playerEast.id ? '🃏' : ''}
-							{ownerId === playerEast.id && !isSoloMode ? '👑' : ''}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="flex flex-col items-center justify-end pt-8 pb-4">
-				<div
-					class="mb-4 rounded-full border border-white/10 bg-black/40 px-6 py-2 backdrop-blur-sm transition-colors {isMyTurn
-						? 'border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-						: ''}"
-				>
-					{#if isMyTurn}
-						<span class="font-bold text-amber-400">🔥 YOUR TURN! Play a card.</span>
-					{:else}
-						<span class="text-emerald-300">⏳ Waiting for {activePlayerId}...</span>
-					{/if}
-				</div>
-
-				<div class="relative flex h-32 w-full max-w-3xl justify-center gap-2">
-					{#each myHand as card, index}
-						<div use:dealAnimation={{ index, playerOffset: 0 }} class="h-36 w-24">
-							<button
-								onclick={() => playCard(index)}
-								class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-300 hover:z-50
-                {isMyTurn
-									? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
-									: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
-								style="transform: translateY({Math.abs(index - myHand.length / 2) *
-									5}px) rotate({(index - myHand.length / 2) * 3}deg);"
-							>
-								<img
-									src="/cards/{card.suit}-{card.rank}.svg"
-									alt="{card.rank} of {card.suit}"
-									class="h-full w-full object-contain drop-shadow-md"
-									draggable="false"
-								/>
-							</button>
-						</div>
-					{/each}
-				</div>
-			</div>
-		</div>
+		<Table
+			{myHand}
+			{table}
+			{playersList}
+			{activePlayerId}
+			{myPlayerId}
+			{ownerId}
+			{dealerId}
+			{team1Points}
+			{team2Points}
+			{team1MatchPoints}
+			{team2MatchPoints}
+			{trumpCard}
+			{currentRoomCode}
+			{isSoloMode}
+			{quitRoom}
+			{playCard}
+		/>
 	{/if}
 
 	{#if showGameOverModal && gameOverData}
@@ -803,7 +287,6 @@
 				class="w-full max-w-md rounded-2xl border-2 border-amber-500 bg-emerald-900 p-8 text-center shadow-[0_0_50px_rgba(251,191,36,0.2)]"
 			>
 				<h2 class="mb-2 text-4xl font-bold text-amber-400">Round Over!</h2>
-
 				<div
 					class="my-8 flex justify-around rounded-xl border border-emerald-800 bg-emerald-950 p-6 shadow-inner"
 				>
@@ -823,22 +306,18 @@
 						<span class="mt-1 text-[10px] text-white/50 uppercase">Points</span>
 					</div>
 				</div>
-
 				<p class="mb-8 text-lg font-bold whitespace-pre-line text-emerald-100">
 					{gameOverData.matchResult}
 				</p>
-
 				<div class="flex flex-col gap-3">
 					{#if ownerId === myPlayerId || isSoloMode}
 						<button
 							onclick={() => socket?.send('START_GAME')}
-							class="w-full rounded-lg py-4 font-bold shadow-lg transition-transform hover:-translate-y-1
-              {gameOverData.isMatchOver
+							class="w-full rounded-lg py-4 font-bold shadow-lg transition-transform hover:-translate-y-1 {gameOverData.isMatchOver
 								? 'bg-indigo-600 text-white hover:bg-indigo-500'
 								: 'bg-amber-500 text-emerald-950 hover:bg-amber-400'}"
+							>{gameOverData.isMatchOver ? '🏆 Play New Match' : '🃏 Play Next Round'}</button
 						>
-							{gameOverData.isMatchOver ? '🏆 Play New Match' : '🃏 Play Next Round'}
-						</button>
 					{:else}
 						<div
 							class="rounded-lg border border-emerald-700 bg-emerald-800/50 py-4 font-bold text-emerald-300 italic"
@@ -846,16 +325,13 @@
 							Waiting for host to continue...
 						</div>
 					{/if}
-
 					<button
 						onclick={quitRoom}
-						class="w-full rounded-lg border py-3 text-sm font-bold tracking-widest uppercase transition-colors
-            {gameOverData.isMatchOver
+						class="w-full rounded-lg border py-3 text-sm font-bold tracking-widest uppercase transition-colors {gameOverData.isMatchOver
 							? 'border-emerald-500/50 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-800 hover:text-white'
 							: 'border-red-500/30 bg-red-900/20 text-red-400 hover:bg-red-900/50 hover:text-red-300'}"
+						>{gameOverData.isMatchOver ? '🏠 Return to Home' : 'Leave Room'}</button
 					>
-						{gameOverData.isMatchOver ? '🏠 Return to Home' : 'Leave Room'}
-					</button>
 				</div>
 			</div>
 		</div>
@@ -863,13 +339,13 @@
 </main>
 
 <style>
-	.custom-scrollbar::-webkit-scrollbar {
+	:global(.custom-scrollbar::-webkit-scrollbar) {
 		width: 6px;
 	}
-	.custom-scrollbar::-webkit-scrollbar-track {
+	:global(.custom-scrollbar::-webkit-scrollbar-track) {
 		background: transparent;
 	}
-	.custom-scrollbar::-webkit-scrollbar-thumb {
+	:global(.custom-scrollbar::-webkit-scrollbar-thumb) {
 		background-color: #047857;
 		border-radius: 10px;
 	}
