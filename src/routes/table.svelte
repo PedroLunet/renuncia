@@ -235,9 +235,7 @@
 				<img
 					src="/{trumpCard.suit}.svg"
 					alt={trumpCard.suit}
-					class="h-7 w-7 object-contain {trumpCard.suit === 'espadas' || trumpCard.suit === 'paus'
-						? 'invert'
-						: ''}"
+					class="h-7 w-7 object-contain"
 				/>
 			</div>
 		</div>
