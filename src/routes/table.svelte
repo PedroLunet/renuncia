@@ -239,7 +239,7 @@
 			>
 				{#if myHand.length > 0}
 					<div class="mb-2 flex -space-x-6">
-						{#each Array(myHand.length) as _, index (index)}
+						{#each myHand as card, index (card.suit + card.rank)}
 							<div use:dealAnimation={{ index, playerOffset: 2 }}>
 								<img
 									src="/cards/back.svg"
@@ -284,7 +284,7 @@
 				</div>
 				{#if myHand.length > 0}
 					<div class="ml-2 flex flex-col -space-y-8">
-						{#each Array(myHand.length) as _, index (index)}
+						{#each myHand as card, index (card.suit + card.rank)}
 							<div use:dealAnimation={{ index, playerOffset: 3 }}>
 								<img
 									src="/cards/back.svg"
@@ -390,7 +390,7 @@
 			>
 				{#if myHand.length > 0}
 					<div class="mr-2 flex flex-col -space-y-8">
-						{#each Array(myHand.length) as _, index (index)}
+						{#each myHand as card, index (card.suit + card.rank)}
 							<div use:dealAnimation={{ index, playerOffset: 1 }}>
 								<img
 									src="/cards/back.svg"
