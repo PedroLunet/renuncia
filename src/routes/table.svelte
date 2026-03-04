@@ -227,16 +227,18 @@
 	{#if trumpCard}
 		<div
 			in:fade={{ duration: 500, delay: isStartOfRound ? 3200 : 0 }}
-			class="absolute top-8 right-8 z-20 flex flex-col items-end"
+			class="absolute top-8 right-8 z-20 flex flex-col items-end gap-1"
 		>
 			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Trunfo</span>
-			<div
-				class="flex items-center gap-2 text-3xl font-light text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
-			>
+			<div class="flex items-center gap-3 text-3xl font-light text-white">
 				{trumpCard.rank}
-				<span class="text-2xl">
-					{#if trumpCard.suit === 'copas'}❤️{:else if trumpCard.suit === 'espadas'}♠️{:else if trumpCard.suit === 'ouros'}♦️{:else}♣️{/if}
-				</span>
+				<img
+					src="/{trumpCard.suit}.svg"
+					alt={trumpCard.suit}
+					class="h-7 w-7 object-contain {trumpCard.suit === 'espadas' || trumpCard.suit === 'paus'
+						? 'invert'
+						: ''}"
+				/>
 			</div>
 		</div>
 	{/if}
