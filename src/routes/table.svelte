@@ -4,6 +4,20 @@
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
 
+	export interface Card {
+		suit: 'copas' | 'espadas' | 'ouros' | 'paus';
+		rank: '2' | '3' | '4' | '5' | '6' | 'Q' | 'J' | 'K' | '7' | 'A';
+		value: number;
+	}
+	export interface Player {
+		id: string;
+		isBot: boolean;
+	}
+	export interface PlayedCard {
+		playerId: string;
+		card: Card;
+	}
+
 	let {
 		myHand,
 		table,
@@ -22,9 +36,9 @@
 		quitRoom,
 		playCard
 	} = $props<{
-		myHand: any[];
-		table: any[];
-		playersList: any[];
+		myHand: Card[];
+		table: PlayedCard[];
+		playersList: Player[];
 		activePlayerId: string;
 		myPlayerId: string;
 		ownerId: string;
@@ -33,7 +47,7 @@
 		team2Points: number;
 		team1MatchPoints: number;
 		team2MatchPoints: number;
-		trumpCard: any;
+		trumpCard: Card | null;
 		currentRoomCode: string;
 		isSoloMode: boolean;
 		quitRoom: () => void;
@@ -43,7 +57,8 @@
 	let isMyTurn = $derived(
 		activePlayerId === myPlayerId && activePlayerId !== '' && table.length < 4
 	);
-	let myIndex = $derived(playersList.findIndex((p) => p.id === myPlayerId));
+
+	let myIndex = $derived(playersList.findIndex((p: Player) => p.id === myPlayerId));
 	let playerSouth = $derived(playersList[myIndex]);
 	let playerEast = $derived(playersList[(myIndex + 1) % 4]);
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
@@ -53,9 +68,9 @@
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
 
-	function getPlayedCard(playerId: string | undefined) {
+	function getPlayedCard(playerId: string | undefined): Card | null {
 		if (!playerId) return null;
-		return table.find((play) => play.playerId === playerId)?.card;
+		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
 	}
 
 	function dealAnimation(
@@ -77,7 +92,7 @@
 			const cardRect = node.getBoundingClientRect();
 			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
 			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
-			const dIndex = playersList.findIndex((p) => p.id === dealerId);
+			const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
 			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
 			const isDealer = playerOffset === dOffset;
 			const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
@@ -137,7 +152,7 @@
 			node.style.display = 'none';
 			return;
 		}
-		const dIndex = playersList.findIndex((p) => p.id === dealerId);
+		const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
 		const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
 		const tl = gsap.timeline();
 		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0, rotationY: 0 });
@@ -224,7 +239,7 @@
 			>
 				{#if myHand.length > 0}
 					<div class="mb-2 flex -space-x-6">
-						{#each Array(myHand.length) as _, index}
+						{#each Array(myHand.length) as _, index (index)}
 							<div use:dealAnimation={{ index, playerOffset: 2 }}>
 								<img
 									src="/cards/back.svg"
@@ -269,7 +284,7 @@
 				</div>
 				{#if myHand.length > 0}
 					<div class="ml-2 flex flex-col -space-y-8">
-						{#each Array(myHand.length) as _, index}
+						{#each Array(myHand.length) as _, index (index)}
 							<div use:dealAnimation={{ index, playerOffset: 3 }}>
 								<img
 									src="/cards/back.svg"
@@ -316,47 +331,50 @@
 					class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerNorth?.id).suit}-{getPlayedCard(playerNorth?.id)
-							.rank}.svg"
+						src="/cards/{getPlayedCard(playerNorth?.id)?.suit}-{getPlayedCard(playerNorth?.id)
+							?.rank}.svg"
 						alt="Played Card"
 						class="h-full w-full object-contain"
 					/>
 				</div>
 			{/if}
+
 			{#if getPlayedCard(playerSouth?.id)}
 				<div
 					in:fly={{ y: 100, duration: 300, easing: cubicOut }}
 					class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerSouth?.id).suit}-{getPlayedCard(playerSouth?.id)
-							.rank}.svg"
+						src="/cards/{getPlayedCard(playerSouth?.id)?.suit}-{getPlayedCard(playerSouth?.id)
+							?.rank}.svg"
 						alt="Played Card"
 						class="h-full w-full object-contain"
 					/>
 				</div>
 			{/if}
+
 			{#if getPlayedCard(playerWest?.id)}
 				<div
 					in:fly={{ x: -100, duration: 300, easing: cubicOut }}
 					class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerWest?.id).suit}-{getPlayedCard(playerWest?.id)
-							.rank}.svg"
+						src="/cards/{getPlayedCard(playerWest?.id)?.suit}-{getPlayedCard(playerWest?.id)
+							?.rank}.svg"
 						alt="Played Card"
 						class="h-full w-full object-contain"
 					/>
 				</div>
 			{/if}
+
 			{#if getPlayedCard(playerEast?.id)}
 				<div
 					in:fly={{ x: 100, duration: 300, easing: cubicOut }}
 					class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerEast?.id).suit}-{getPlayedCard(playerEast?.id)
-							.rank}.svg"
+						src="/cards/{getPlayedCard(playerEast?.id)?.suit}-{getPlayedCard(playerEast?.id)
+							?.rank}.svg"
 						alt="Played Card"
 						class="h-full w-full object-contain"
 					/>
@@ -372,7 +390,7 @@
 			>
 				{#if myHand.length > 0}
 					<div class="mr-2 flex flex-col -space-y-8">
-						{#each Array(myHand.length) as _, index}
+						{#each Array(myHand.length) as _, index (index)}
 							<div use:dealAnimation={{ index, playerOffset: 1 }}>
 								<img
 									src="/cards/back.svg"
@@ -414,11 +432,12 @@
 		</div>
 
 		<div class="relative flex h-32 w-full max-w-3xl justify-center gap-2">
-			{#each myHand as card, index}
+			{#each myHand as card, index (card.suit + card.rank)}
 				<div use:dealAnimation={{ index, playerOffset: 0 }} class="h-36 w-24">
 					<button
 						onclick={() => playCard(index)}
-						class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-300 hover:z-50 {isMyTurn
+						class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-300 hover:z-50
+            {isMyTurn
 							? 'cursor-pointer hover:-translate-y-6 hover:shadow-2xl'
 							: 'cursor-not-allowed opacity-80 hover:-translate-y-2'}"
 						style="transform: translateY({Math.abs(index - myHand.length / 2) *
