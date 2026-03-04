@@ -167,7 +167,7 @@
 </script>
 
 <main
-	class="flex min-h-screen flex-col items-center justify-center bg-emerald-900 p-4 font-sans text-white selection:bg-emerald-500"
+	class="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0c] p-4 font-sans text-white selection:bg-neutral-500"
 >
 	{#if errorMessage}
 		<div
