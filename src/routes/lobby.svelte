@@ -24,7 +24,7 @@
 	<div class="space-y-6">
 		<button
 			onclick={() => connectToTable(`SOLO_${localPlayerId}`, true, false)}
-			class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
+			class="w-full rounded-lg bg-indigo-600 py-4 font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-indigo-500"
 		>
 			👤 Solo Match
 		</button>
@@ -32,7 +32,7 @@
 		<div class="flex gap-4">
 			<button
 				onclick={() => connectToTable(generateRoomCode(), false, false)}
-				class="flex-1 rounded-lg bg-emerald-600 py-3 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+				class="flex-1 rounded-lg bg-emerald-600 py-3 font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
 			>
 				➕ Public Room
 			</button>
@@ -49,7 +49,7 @@
 				<h2 class="text-xl font-bold text-emerald-300">Open Rooms</h2>
 				<button
 					onclick={fetchRooms}
-					class="text-xs font-bold tracking-wider text-emerald-400 uppercase hover:text-white"
+					class="text-xs font-bold tracking-wider text-emerald-400 uppercase hover:text-text"
 					>🔄 Refresh</button
 				>
 			</div>
@@ -95,12 +95,12 @@
 				bind:value={roomInput}
 				placeholder="ABCD"
 				maxlength="4"
-				class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 text-center font-mono text-xl font-bold text-white uppercase placeholder-emerald-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+				class="w-full rounded-lg border border-emerald-600 bg-emerald-950 px-4 py-3 text-center font-mono text-xl font-bold text-text uppercase placeholder-emerald-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
 			/>
 			<button
 				onclick={() => connectToTable(roomInput, false, false)}
 				disabled={roomInput.length < 4}
-				class="rounded-lg bg-emerald-700 px-8 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+				class="rounded-lg bg-emerald-700 px-8 font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
 				>Join</button
 			>
 		</div>

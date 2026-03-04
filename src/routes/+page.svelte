@@ -167,11 +167,11 @@
 </script>
 
 <main
-	class="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0c] p-4 font-sans text-white selection:bg-neutral-500"
+	class="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0c] p-4 font-sans text-text selection:bg-neutral-500"
 >
 	{#if errorMessage}
 		<div
-			class="fixed top-10 left-1/2 z-50 -translate-x-1/2 animate-bounce rounded-full border-2 border-red-400 bg-red-900/90 px-6 py-2 font-bold text-white shadow-xl backdrop-blur-md"
+			class="fixed top-10 left-1/2 z-50 -translate-x-1/2 animate-bounce rounded-full border-2 border-red-400 bg-red-900/90 px-6 py-2 font-bold text-text shadow-xl backdrop-blur-md"
 		>
 			⚠️ {errorMessage}
 		</div>
@@ -210,7 +210,7 @@
 				<p class="mb-8 text-emerald-200">Players in room: {playersList.length}/4</p>
 				<div class="mb-6 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
 					<div class="mb-2 text-sm tracking-widest text-emerald-400 uppercase">Room Code</div>
-					<div class="font-mono text-5xl font-bold tracking-widest text-white">
+					<div class="font-mono text-5xl font-bold tracking-widest text-text">
 						{currentRoomCode}
 					</div>
 				</div>
@@ -245,7 +245,7 @@
 				{#if ownerId === myPlayerId}
 					<button
 						onclick={() => socket?.send('START_GAME')}
-						class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-white shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+						class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
 						>Start Game Now</button
 					>
 				{:else}
@@ -302,8 +302,8 @@
 						<span class="mb-1 text-xs font-bold tracking-widest text-emerald-400 uppercase"
 							>Team 2</span
 						>
-						<span class="text-4xl font-bold text-white">{gameOverData.t2}</span>
-						<span class="mt-1 text-[10px] text-white/50 uppercase">Points</span>
+						<span class="text-4xl font-bold text-text">{gameOverData.t2}</span>
+						<span class="mt-1 text-[10px] text-text/50 uppercase">Points</span>
 					</div>
 				</div>
 				<p class="mb-8 text-lg font-bold whitespace-pre-line text-emerald-100">
@@ -314,7 +314,7 @@
 						<button
 							onclick={() => socket?.send('START_GAME')}
 							class="w-full rounded-lg py-4 font-bold shadow-lg transition-transform hover:-translate-y-1 {gameOverData.isMatchOver
-								? 'bg-indigo-600 text-white hover:bg-indigo-500'
+								? 'bg-indigo-600 text-text hover:bg-indigo-500'
 								: 'bg-amber-500 text-emerald-950 hover:bg-amber-400'}"
 							>{gameOverData.isMatchOver ? '🏆 Play New Match' : '🃏 Play Next Round'}</button
 						>
@@ -328,7 +328,7 @@
 					<button
 						onclick={quitRoom}
 						class="w-full rounded-lg border py-3 text-sm font-bold tracking-widest uppercase transition-colors {gameOverData.isMatchOver
-							? 'border-emerald-500/50 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-800 hover:text-white'
+							? 'border-emerald-500/50 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-800 hover:text-text'
 							: 'border-red-500/30 bg-red-900/20 text-red-400 hover:bg-red-900/50 hover:text-red-300'}"
 						>{gameOverData.isMatchOver ? '🏠 Return to Home' : 'Leave Room'}</button
 					>

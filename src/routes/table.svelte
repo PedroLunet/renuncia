@@ -193,7 +193,7 @@
 		<div class="flex flex-col">
 			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Team 1 (N/S)</span>
 			<div class="flex items-baseline gap-2">
-				<span class="text-3xl font-light text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+				<span class="text-3xl font-light text-text drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
 					>{team1Points}</span
 				>
 				<span class="text-xs font-light text-neutral-400">{team1MatchPoints} Sets</span>
@@ -202,7 +202,7 @@
 		<div class="flex flex-col">
 			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Team 2 (E/W)</span>
 			<div class="flex items-baseline gap-2">
-				<span class="text-3xl font-light text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+				<span class="text-3xl font-light text-text drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
 					>{team2Points}</span
 				>
 				<span class="text-xs font-light text-neutral-400">{team2MatchPoints} Sets</span>
@@ -218,7 +218,7 @@
 		{/if}
 		<button
 			onclick={quitRoom}
-			class="text-left text-[10px] font-medium tracking-[0.2em] text-neutral-500 uppercase transition-colors hover:text-white"
+			class="text-left text-[10px] font-medium tracking-[0.2em] text-neutral-500 uppercase transition-colors hover:text-text"
 		>
 			Quit Match
 		</button>
@@ -230,13 +230,9 @@
 			class="absolute top-8 right-8 z-20 flex flex-col items-end gap-1"
 		>
 			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Trunfo</span>
-			<div class="flex items-center gap-3 text-3xl font-light text-white">
+			<div class="flex items-center gap-3 text-3xl font-light text-text">
 				{trumpCard.rank}
-				<img
-					src="/{trumpCard.suit}.svg"
-					alt={trumpCard.suit}
-					class="h-7 w-7 object-contain"
-				/>
+				<img src="/{trumpCard.suit}.svg" alt={trumpCard.suit} class="h-7 w-7 object-contain" />
 			</div>
 		</div>
 	{/if}
@@ -261,7 +257,7 @@
 				<div
 					class="text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {activePlayerId ===
 					playerNorth.id
-						? 'scale-105 text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
+						? 'scale-105 text-text drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
 						: 'text-neutral-600'}"
 				>
 					{playerNorth.id}
@@ -277,7 +273,7 @@
 				<div
 					class="text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {activePlayerId ===
 					playerWest.id
-						? 'scale-105 text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
+						? 'scale-105 text-text drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
 						: 'text-neutral-600'}"
 					style="transform: rotate(-90deg);"
 				>
@@ -412,7 +408,7 @@
 				<div
 					class="text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {activePlayerId ===
 					playerEast.id
-						? 'scale-105 text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
+						? 'scale-105 text-text drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
 						: 'text-neutral-600'}"
 					style="transform: rotate(90deg);"
 				>
@@ -426,7 +422,7 @@
 	<div class="flex flex-col items-center justify-end pb-8">
 		<div
 			class="mb-8 text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {isMyTurn
-				? 'text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
+				? 'text-text drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]'
 				: 'text-neutral-600'}"
 		>
 			{#if isMyTurn}
