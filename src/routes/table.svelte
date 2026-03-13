@@ -5,7 +5,6 @@
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
 
-	// --- TYPES ---
 	export interface Card {
 		suit: 'copas' | 'espadas' | 'ouros' | 'paus';
 		rank: '2' | '3' | '4' | '5' | '6' | 'Q' | 'J' | 'K' | '7' | 'A';
@@ -82,11 +81,19 @@
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
 
+	let trickCollected = $state(false);
 	let lastPlayedCardRect: DOMRect | null = null;
 	let cachedDeckCenter: { x: number; y: number } | null = null;
 
 	$effect(() => {
-		if (isStartOfRound) cachedDeckCenter = null;
+		if (isStartOfRound) {
+			cachedDeckCenter = null;
+			trickCollected = false;
+		} else if (table.length === 0 && myHand.length < 10) {
+			setTimeout(() => {
+				trickCollected = true;
+			}, 1300);
+		}
 	});
 
 	function handlePlayCard(index: number) {
@@ -99,6 +106,68 @@
 	function getPlayedCard(playerId: string | undefined): Card | null {
 		if (!playerId) return null;
 		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
+	}
+
+	function trickVanish(node: HTMLElement, { initialRot = 0 }) {
+		const rect = node.getBoundingClientRect();
+
+		const centerTargetX = window.innerWidth / 2 - (rect.left + rect.width / 2);
+		const centerTargetY = window.innerHeight / 2 - (rect.top + rect.height / 2);
+
+		const pileTargetX = window.innerWidth - 32 - 25.6 - (rect.left + rect.width / 2);
+		const pileTargetY = window.innerHeight - 32 - 38.4 - (rect.top + rect.height / 2);
+
+		const faceImg = node.querySelector('.card-face') as HTMLElement;
+		const backImg = node.querySelector('.card-back') as HTMLElement;
+
+		return {
+			duration: 1500,
+			css: (t: number, u: number) => {
+				let x = 0,
+					y = 0,
+					rotZ = initialRot,
+					rotY = 0,
+					scale = 1;
+
+				if (u < 0.3) {
+					const p = cubicOut(u / 0.3);
+					x = centerTargetX * p;
+					y = centerTargetY * p;
+					rotZ = initialRot * (1 - p);
+				} else if (u < 0.5) {
+					x = centerTargetX;
+					y = centerTargetY;
+					rotZ = 0;
+				} else if (u < 0.7) {
+					const p = (u - 0.5) / 0.2;
+					x = centerTargetX;
+					y = centerTargetY;
+					rotZ = 0;
+					rotY = 180 * p;
+				} else {
+					const p = cubicOut((u - 0.7) / 0.3);
+					x = centerTargetX + (pileTargetX - centerTargetX) * p;
+					y = centerTargetY + (pileTargetY - centerTargetY) * p;
+					rotZ = 0;
+					rotY = 180;
+					scale = 1 - 0.2 * p;
+				}
+
+				if (rotY > 90) {
+					if (faceImg) faceImg.style.display = 'none';
+					if (backImg) backImg.style.display = 'block';
+				} else {
+					if (faceImg) faceImg.style.display = 'block';
+					if (backImg) backImg.style.display = 'none';
+				}
+
+				return `
+          transform: translate(${x}px, ${y}px) rotateZ(${rotZ}deg) rotateY(${rotY}deg) scale(${scale});
+          transform-style: preserve-3d;
+          z-index: 9999;
+        `;
+			}
+		};
 	}
 
 	function playAnimation(node: HTMLElement, { playerId }: { playerId: string }) {
@@ -137,7 +206,12 @@
 						scale: 1,
 						duration: 0.4,
 						ease: 'power2.out',
-						clearProps: 'transform'
+						onComplete: () => {
+							gsap.set(node, { clearProps: 'transform' });
+							if (targetRotation !== 0) {
+								node.style.transform = `rotate(${targetRotation}deg)`;
+							}
+						}
 					}
 				);
 			} else {
@@ -189,7 +263,6 @@
 				const isDealer = playerOffset === dOffset;
 				const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
 
-				// PERFECT SCALE: Cards start exactly the size of the 64x96 center deck
 				const isMe = playerOffset === 0;
 				const startScale = isMe ? 0.666 : 1.333;
 
@@ -288,7 +361,6 @@
 		};
 	}
 
-	// --- CONTINUOUS DECK DEPLETION ILLUSION ---
 	function deckAnim(node: HTMLElement, isStart: boolean) {
 		function applyAnim(start: boolean) {
 			const l1 = node.querySelector('.deck-layer-1');
@@ -300,22 +372,10 @@
 			}
 
 			gsap.set(node, { opacity: 1 });
-
-			// Set initial "thickness" by shifting layers down and right
 			gsap.set(l1, { x: 8, y: 8, opacity: 0.4 });
 			gsap.set(l2, { x: 4, y: 4, opacity: 0.7 });
 
-			// Continuously compress the thickness to 0 over the dealing period
-			gsap.to([l1, l2], {
-				x: 0,
-				y: 0,
-				opacity: 0,
-				duration: 2.0, // Squeezes down smoothly
-				delay: 0.5, // Starts right as dealing starts
-				ease: 'none' // Linear ease makes it look like physical cards leaving
-			});
-
-			// The central card perfectly vanishes the millisecond the last regular card takes off
+			gsap.to([l1, l2], { x: 0, y: 0, opacity: 0, duration: 2.0, delay: 0.5, ease: 'none' });
 			gsap.set(node, { opacity: 0, delay: 2.5 });
 		}
 		applyAnim(isStart);
@@ -368,6 +428,26 @@
 			Quit Match
 		</button>
 	</div>
+
+	{#if trickCollected}
+		<div
+			in:fade={{ duration: 300 }}
+			class="absolute right-8 bottom-8 z-10 flex h-[76.8px] w-[51.2px] items-center justify-center"
+		>
+			<img
+				src="/cards/back.svg"
+				alt="Pile"
+				class="absolute top-0 left-0 h-full w-full opacity-90 drop-shadow-xl"
+				draggable="false"
+			/>
+			<img
+				src="/cards/back.svg"
+				alt="Pile"
+				class="absolute top-1 left-1 -z-10 h-full w-full drop-shadow-lg"
+				draggable="false"
+			/>
+		</div>
+	{/if}
 
 	{#if trumpCard}
 		<div
@@ -485,13 +565,21 @@
 			{#if getPlayedCard(playerNorth?.id)}
 				<div
 					use:playAnimation={{ playerId: playerNorth.id }}
-					class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg drop-shadow-xl"
+					out:trickVanish={{ initialRot: 0 }}
+					class="absolute z-20 flex flex-col justify-between rounded-lg drop-shadow-xl"
+					style="width: 64px; height: 96px; top: 16px; left: calc(50% - 32px);"
 				>
 					<img
 						src="/cards/{getPlayedCard(playerNorth?.id)?.suit}-{getPlayedCard(playerNorth?.id)
 							?.rank}.svg"
-						alt="Played Card"
-						class="h-full w-full object-contain"
+						alt="Face"
+						class="card-face absolute inset-0 h-full w-full object-contain"
+					/>
+					<img
+						src="/cards/back.svg"
+						alt="Back"
+						class="card-back absolute inset-0 h-full w-full object-contain"
+						style="display: none;"
 					/>
 				</div>
 			{/if}
@@ -499,13 +587,21 @@
 			{#if getPlayedCard(playerSouth?.id)}
 				<div
 					use:playAnimation={{ playerId: playerSouth.id }}
-					class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg drop-shadow-xl"
+					out:trickVanish={{ initialRot: 0 }}
+					class="absolute z-40 flex flex-col justify-between rounded-lg drop-shadow-xl"
+					style="width: 64px; height: 96px; bottom: 16px; left: calc(50% - 32px);"
 				>
 					<img
 						src="/cards/{getPlayedCard(playerSouth?.id)?.suit}-{getPlayedCard(playerSouth?.id)
 							?.rank}.svg"
-						alt="Played Card"
-						class="h-full w-full object-contain"
+						alt="Face"
+						class="card-face absolute inset-0 h-full w-full object-contain"
+					/>
+					<img
+						src="/cards/back.svg"
+						alt="Back"
+						class="card-back absolute inset-0 h-full w-full object-contain"
+						style="display: none;"
 					/>
 				</div>
 			{/if}
@@ -513,13 +609,21 @@
 			{#if getPlayedCard(playerWest?.id)}
 				<div
 					use:playAnimation={{ playerId: playerWest.id }}
-					class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg drop-shadow-xl"
+					out:trickVanish={{ initialRot: 90 }}
+					class="absolute z-30 flex flex-col justify-between rounded-lg drop-shadow-xl"
+					style="width: 64px; height: 96px; left: 16px; top: calc(50% - 48px); transform: rotate(90deg);"
 				>
 					<img
 						src="/cards/{getPlayedCard(playerWest?.id)?.suit}-{getPlayedCard(playerWest?.id)
 							?.rank}.svg"
-						alt="Played Card"
-						class="h-full w-full object-contain"
+						alt="Face"
+						class="card-face absolute inset-0 h-full w-full object-contain"
+					/>
+					<img
+						src="/cards/back.svg"
+						alt="Back"
+						class="card-back absolute inset-0 h-full w-full object-contain"
+						style="display: none;"
 					/>
 				</div>
 			{/if}
@@ -527,13 +631,21 @@
 			{#if getPlayedCard(playerEast?.id)}
 				<div
 					use:playAnimation={{ playerId: playerEast.id }}
-					class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg drop-shadow-xl"
+					out:trickVanish={{ initialRot: -90 }}
+					class="absolute z-30 flex flex-col justify-between rounded-lg drop-shadow-xl"
+					style="width: 64px; height: 96px; right: 16px; top: calc(50% - 48px); transform: rotate(-90deg);"
 				>
 					<img
 						src="/cards/{getPlayedCard(playerEast?.id)?.suit}-{getPlayedCard(playerEast?.id)
 							?.rank}.svg"
-						alt="Played Card"
-						class="h-full w-full object-contain"
+						alt="Face"
+						class="card-face absolute inset-0 h-full w-full object-contain"
+					/>
+					<img
+						src="/cards/back.svg"
+						alt="Back"
+						class="card-back absolute inset-0 h-full w-full object-contain"
+						style="display: none;"
 					/>
 				</div>
 			{/if}
