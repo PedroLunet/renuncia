@@ -196,70 +196,6 @@
 				>Cancel Request</button
 			>
 		</div>
-	{:else if !gameStarted}
-		{#if isSoloMode}
-			<div class="flex flex-col items-center justify-center p-8 text-center">
-				<div class="mb-4 animate-bounce text-6xl">🃏</div>
-				<h1 class="text-2xl font-bold text-amber-400">Shuffling the deck...</h1>
-			</div>
-		{:else}
-			<div
-				class="w-full max-w-md rounded-xl border border-emerald-700 bg-emerald-800 p-8 text-center shadow-2xl"
-			>
-				<h1 class="mb-2 text-3xl font-bold text-amber-400">
-					{#if ownerId === myPlayerId}👑 You are the Host!{:else}Waiting for players...{/if}
-				</h1>
-				<p class="mb-8 text-emerald-200">Players in room: {playersList.length}/4</p>
-				<div class="mb-6 rounded-lg border border-emerald-600 bg-emerald-950 p-6 shadow-inner">
-					<div class="mb-2 text-sm tracking-widest text-emerald-400 uppercase">Room Code</div>
-					<div class="font-mono text-5xl font-bold tracking-widest text-text">
-						{currentRoomCode}
-					</div>
-				</div>
-				{#if ownerId === myPlayerId && approvalRequests.length > 0}
-					<div class="mb-6 rounded-lg border-2 border-amber-500 bg-emerald-900 p-4">
-						<h3 class="mb-3 text-sm font-bold tracking-widest text-amber-400 uppercase">
-							Pending Requests
-						</h3>
-						<div class="space-y-2">
-							{#each approvalRequests as reqId}
-								<div
-									class="flex items-center justify-between rounded border border-emerald-700 bg-emerald-950 p-2"
-								>
-									<span class="font-bold">{reqId}</span>
-									<div class="flex gap-2">
-										<button
-											onclick={() => socket?.send(`DECLINE_PLAYER:${reqId}`)}
-											class="rounded bg-red-900/50 px-3 py-1 text-xs font-bold text-red-400 uppercase hover:bg-red-800"
-											>Decline</button
-										>
-										<button
-											onclick={() => socket?.send(`ACCEPT_PLAYER:${reqId}`)}
-											class="rounded bg-amber-500 px-3 py-1 text-xs font-bold text-emerald-950 uppercase hover:bg-amber-400"
-											>Accept</button
-										>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-				{#if ownerId === myPlayerId}
-					<button
-						onclick={() => socket?.send('START_GAME')}
-						class="w-full rounded-lg bg-emerald-600 py-4 font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
-						>Start Game Now</button
-					>
-				{:else}
-					<div class="py-4 text-emerald-400 italic">Waiting for host to start the game...</div>
-				{/if}
-				<button
-					onclick={quitRoom}
-					class="mt-6 text-sm font-bold tracking-widest text-red-400 uppercase hover:text-red-300"
-					>Leave Room</button
-				>
-			</div>
-		{/if}
 	{:else}
 		<Table
 			{myHand}
@@ -277,6 +213,9 @@
 			{currentRoomCode}
 			{isSoloMode}
 			{handSizes}
+			{gameStarted}
+			{socket}
+			{approvalRequests}
 			{quitRoom}
 			{playCard}
 		/>

@@ -241,7 +241,12 @@ export class GameRoom extends DurableObject {
 				}
 			}
 
-			if (textMessage === 'START_GAME' && !this.gameStarted) {
+			if (textMessage === 'START_GAME') {
+				if (this.gameStarted) {
+					this.broadcastGameState();
+					return;
+				}
+
 				if (this.isPrivate && playerId !== this.ownerId) {
 					ws.send(
 						JSON.stringify({ action: 'ERROR', message: 'Only the host can start the game.' })
@@ -285,6 +290,7 @@ export class GameRoom extends DurableObject {
 				const dealerId = this.players[this.dealerIndex].id;
 				for (let i = 0; i < 4; i++) {
 					const playerHand = this.hands[this.players[i].id];
+					if (!playerHand) continue;
 					const trunfoIndex = playerHand.findIndex(
 						(c) => c.suit === this.trumpCard!.suit && c.rank === this.trumpCard!.rank
 					);
@@ -418,7 +424,11 @@ export class GameRoom extends DurableObject {
 				this.currentTurnIndex = winnerIndex;
 				this.currentTrick = [];
 
-				if (this.hands[this.players[0].id].length === 0) {
+				if (
+					!this.players[0] ||
+					!this.hands[this.players[0].id] ||
+					this.hands[this.players[0].id].length === 0
+				) {
 					this.gameStarted = false;
 					let matchResult = '';
 					let isMatchOver = false;
@@ -451,6 +461,7 @@ export class GameRoom extends DurableObject {
 
 					await this.saveState();
 					this.ctx.waitUntil(this.reportToLobby());
+					this.broadcastGameState(); // <--- BROADCAST FULL STATE with gameStarted: false
 					this.broadcast({
 						action: 'GAME_OVER',
 						t1: this.team1Points,

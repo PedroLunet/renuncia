@@ -36,6 +36,9 @@
 		currentRoomCode,
 		isSoloMode,
 		handSizes,
+		gameStarted,
+		socket,
+		approvalRequests,
 		quitRoom,
 		playCard
 	} = $props<{
@@ -54,6 +57,9 @@
 		currentRoomCode: string;
 		isSoloMode: boolean;
 		handSizes: Record<string, number>;
+		gameStarted: boolean;
+		socket: WebSocket | null;
+		approvalRequests: string[];
 		quitRoom: () => void;
 		playCard: (index: number) => void;
 	}>();
@@ -549,6 +555,53 @@
 		{/if}
 
 		<div class="relative h-64 w-64">
+			{#if !gameStarted}
+				<div class="absolute inset-0 z-50 flex items-center justify-center">
+					<div
+						class="w-full min-w-[320px] rounded-xl border border-emerald-700 bg-emerald-800/90 p-6 text-center shadow-2xl backdrop-blur-md"
+					>
+						<h1 class="mb-2 text-2xl font-bold text-amber-400">
+							{#if ownerId === myPlayerId}👑 You are the Host!{:else}Waiting for players...{/if}
+						</h1>
+						<p class="mb-6 text-emerald-200">Players in room: {playersList.length}/4</p>
+
+						{#if ownerId === myPlayerId && approvalRequests.length > 0}
+							<div class="mb-4 space-y-2">
+								{#each approvalRequests as reqId}
+									<div
+										class="flex items-center justify-between rounded border border-emerald-700 bg-emerald-950 p-2"
+									>
+										<span class="text-xs font-bold">{reqId}</span>
+										<div class="flex gap-1">
+											<button
+												onclick={() => socket?.send(`DECLINE_PLAYER:${reqId}`)}
+												class="rounded bg-red-900/50 px-2 py-1 text-[10px] font-bold text-red-400 uppercase hover:bg-red-800"
+												>No</button
+											>
+											<button
+												onclick={() => socket?.send(`ACCEPT_PLAYER:${reqId}`)}
+												class="rounded bg-amber-500 px-2 py-1 text-[10px] font-bold text-emerald-950 uppercase hover:bg-amber-400"
+												>Yes</button
+											>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						{#if ownerId === myPlayerId}
+							<button
+								onclick={() => socket?.send('START_GAME')}
+								class="w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
+								>Start Game Now</button
+							>
+						{:else}
+							<div class="text-xs text-emerald-400 italic">Waiting for host to start...</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
 			<div
 				id="deck"
 				use:deckAnim={isStartOfRound}
