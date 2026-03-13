@@ -7,6 +7,7 @@
 
 	let isConnected = $state(false);
 	let myHand: any[] = $state([]);
+	let handSizes: Record<string, number> = $state({});
 	let table: any[] = $state([]);
 	let playersList: any[] = $state([]);
 	let activePlayerId = $state('');
@@ -94,6 +95,7 @@
 
 				ownerId = data.ownerId;
 				myHand = data.myHand;
+				handSizes = data.handSizes || {};
 				table = data.table;
 				playersList = data.players;
 				activePlayerId = data.activePlayerId;
@@ -274,6 +276,7 @@
 			{trumpCard}
 			{currentRoomCode}
 			{isSoloMode}
+			{handSizes}
 			{quitRoom}
 			{playCard}
 		/>

@@ -530,6 +530,11 @@ export class GameRoom extends DurableObject {
 
 	private broadcastGameState() {
 		const allSockets = this.ctx.getWebSockets();
+		const handSizes: Record<string, number> = {};
+		for (const pid in this.hands) {
+			handSizes[pid] = this.hands[pid].length;
+		}
+
 		allSockets.forEach((socket) => {
 			const { playerId } = socket.deserializeAttachment();
 			socket.send(
@@ -542,6 +547,7 @@ export class GameRoom extends DurableObject {
 					dealerId: this.players[this.dealerIndex]?.id,
 					table: this.currentTrick,
 					myHand: this.hands[playerId] || [],
+					handSizes,
 					myPlayerId: playerId,
 					team1Points: this.team1Points,
 					team2Points: this.team2Points,

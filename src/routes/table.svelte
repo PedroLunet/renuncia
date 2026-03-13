@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
 
@@ -33,6 +34,7 @@
 		trumpCard,
 		currentRoomCode,
 		isSoloMode,
+		handSizes,
 		quitRoom,
 		playCard
 	} = $props<{
@@ -50,6 +52,7 @@
 		trumpCard: Card | null;
 		currentRoomCode: string;
 		isSoloMode: boolean;
+		handSizes: Record<string, number>;
 		quitRoom: () => void;
 		playCard: (index: number) => void;
 	}>();
@@ -64,9 +67,77 @@
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerWest = $derived(playersList[(myIndex + 3) % 4]);
 
+	let handNorth = $derived(playerNorth ? Array(handSizes[playerNorth.id] || 0).fill(null) : []);
+	let handEast = $derived(playerEast ? Array(handSizes[playerEast.id] || 0).fill(null) : []);
+	let handWest = $derived(playerWest ? Array(handSizes[playerWest.id] || 0).fill(null) : []);
+	let handSouthCount = $derived(playerSouth ? handSizes[playerSouth.id] || 0 : 0);
+
 	let isStartOfRound = $derived(
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
+
+	let lastPlayedCardRect: DOMRect | null = null;
+
+	function handlePlayCard(index: number) {
+		const card = myHand[index];
+		const el = document.getElementById(`my-card-${card.suit}-${card.rank}`);
+		if (el) {
+			lastPlayedCardRect = el.getBoundingClientRect();
+		}
+		playCard(index);
+	}
+
+	function playAnimation(node: HTMLElement, { playerId }: { playerId: string }) {
+		tick().then(() => {
+			const isMe = playerId === myPlayerId;
+			let sourceRect: DOMRect | null = null;
+			let initialRotation = 0;
+
+			if (isMe && lastPlayedCardRect) {
+				sourceRect = lastPlayedCardRect;
+				lastPlayedCardRect = null; // Reset
+			} else if (!isMe) {
+				const count = handSizes[playerId] || 0;
+				if (count > 0) {
+					const randomIndex = count > 2 ? Math.floor(Math.random() * (count - 2)) + 1 : 0;
+					const sourceEl = document.getElementById(`hand-${playerId}-card-${randomIndex}`);
+					if (sourceEl) sourceRect = sourceEl.getBoundingClientRect();
+				}
+				initialRotation = playerId === playerEast?.id ? -90 : playerId === playerWest?.id ? 90 : 0;
+			}
+
+			if (sourceRect) {
+				const targetRect = node.getBoundingClientRect();
+				const deltaX = sourceRect.left - targetRect.left;
+				const deltaY = sourceRect.top - targetRect.top;
+
+				const targetRotation =
+					playerId === playerEast?.id ? -90 : playerId === playerWest?.id ? 90 : 0;
+
+				gsap.fromTo(
+					node,
+					{ x: deltaX, y: deltaY, rotation: initialRotation, scale: 0.8 },
+					{
+						x: 0,
+						y: 0,
+						rotation: targetRotation,
+						scale: 1,
+						duration: 0.5,
+						ease: 'power2.out',
+						clearProps: 'transform'
+					}
+				);
+			} else {
+				gsap.from(node, { scale: 0, opacity: 0, duration: 0.3 });
+			}
+		});
+
+		return {
+			destroy() {
+				gsap.killTweensOf(node);
+			}
+		};
+	}
 
 	function getPlayedCard(playerId: string | undefined): Card | null {
 		if (!playerId) return null;
@@ -240,10 +311,13 @@
 	<div class="flex h-32 w-full flex-col items-center justify-start pt-8">
 		{#if playerNorth}
 			<div class="flex flex-col items-center gap-4 transition-all">
-				{#if myHand.length > 0}
+				{#if handNorth.length > 0}
 					<div class="flex -space-x-6">
-						{#each myHand as card, index (card.suit + card.rank)}
-							<div use:dealAnimation={{ index, playerOffset: 2 }}>
+						{#each handNorth as _, index}
+							<div
+								use:dealAnimation={{ index, playerOffset: 2 }}
+								id="hand-{playerNorth.id}-card-{index}"
+							>
 								<img
 									src="/cards/back.svg"
 									alt="Card Back"
@@ -280,10 +354,13 @@
 					{playerWest.id}
 					{dealerId === playerWest.id ? '🃏' : ''}
 				</div>
-				{#if myHand.length > 0}
+				{#if handWest.length > 0}
 					<div class="flex flex-col -space-y-8">
-						{#each myHand as card, index (card.suit + card.rank)}
-							<div use:dealAnimation={{ index, playerOffset: 3 }}>
+						{#each handWest as _, index}
+							<div
+								use:dealAnimation={{ index, playerOffset: 3 }}
+								id="hand-{playerWest.id}-card-{index}"
+							>
 								<img
 									src="/cards/back.svg"
 									alt="Card Back"
@@ -333,7 +410,7 @@
 
 			{#if getPlayedCard(playerNorth?.id)}
 				<div
-					in:fly={{ y: -100, duration: 300, easing: cubicOut }}
+					use:playAnimation={{ playerId: playerNorth.id }}
 					class="absolute top-4 left-1/2 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg drop-shadow-xl"
 				>
 					<img
@@ -347,7 +424,7 @@
 
 			{#if getPlayedCard(playerSouth?.id)}
 				<div
-					in:fly={{ y: 100, duration: 300, easing: cubicOut }}
+					use:playAnimation={{ playerId: playerSouth.id }}
 					class="absolute bottom-4 left-1/2 z-10 flex h-24 w-16 -translate-x-1/2 flex-col justify-between rounded-lg drop-shadow-xl"
 				>
 					<img
@@ -361,7 +438,7 @@
 
 			{#if getPlayedCard(playerWest?.id)}
 				<div
-					in:fly={{ x: -100, duration: 300, easing: cubicOut }}
+					use:playAnimation={{ playerId: playerWest.id }}
 					class="absolute top-1/2 left-4 flex h-24 w-16 -translate-y-1/2 rotate-90 flex-col justify-between rounded-lg drop-shadow-xl"
 				>
 					<img
@@ -375,7 +452,7 @@
 
 			{#if getPlayedCard(playerEast?.id)}
 				<div
-					in:fly={{ x: 100, duration: 300, easing: cubicOut }}
+					use:playAnimation={{ playerId: playerEast.id }}
 					class="absolute top-1/2 right-4 flex h-24 w-16 -translate-y-1/2 -rotate-90 flex-col justify-between rounded-lg drop-shadow-xl"
 				>
 					<img
@@ -390,10 +467,13 @@
 
 		{#if playerEast}
 			<div class="flex flex-row items-center gap-6 transition-all">
-				{#if myHand.length > 0}
+				{#if handEast.length > 0}
 					<div class="flex flex-col -space-y-8">
-						{#each myHand as card, index (card.suit + card.rank)}
-							<div use:dealAnimation={{ index, playerOffset: 1 }}>
+						{#each handEast as _, index}
+							<div
+								use:dealAnimation={{ index, playerOffset: 1 }}
+								id="hand-{playerEast.id}-card-{index}"
+							>
 								<img
 									src="/cards/back.svg"
 									alt="Card Back"
@@ -434,9 +514,14 @@
 
 		<div class="relative flex h-32 w-full max-w-3xl justify-center gap-2">
 			{#each myHand as card, index (card.suit + card.rank)}
-				<div use:dealAnimation={{ index, playerOffset: 0 }} class="h-36 w-24">
+				<div
+					use:dealAnimation={{ index, playerOffset: 0 }}
+					animate:flip={{ duration: 400 }}
+					id="my-card-{card.suit}-{card.rank}"
+					class="h-36 w-24"
+				>
 					<button
-						onclick={() => playCard(index)}
+						onclick={() => handlePlayCard(index)}
 						class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-500 hover:z-50
             {isMyTurn
 							? 'cursor-pointer hover:-translate-y-8 hover:drop-shadow-[0_0_25px_rgba(255,255,255,0.3)]'
