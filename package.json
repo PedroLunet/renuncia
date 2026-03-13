@@ -18,7 +18,9 @@
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"clean": "rm -rf .wrangler",
+		"nuke": "rm -rf .wrangler && npm run dev"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.2",
