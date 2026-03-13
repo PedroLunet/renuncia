@@ -76,14 +76,18 @@
 		let wsUrl = `${protocol}//${window.location.host}/api/play/${currentRoomCode}?playerId=${localPlayerId}`;
 		if (isPrivate) wsUrl += '&private=true';
 
-		socket = new WebSocket(wsUrl);
+		const ws = new WebSocket(wsUrl);
+		socket = ws;
 
-		socket.onopen = () => {
+		ws.onopen = () => {
+			// Ignore if this socket was already superseded by a newer connectToTable call.
+			if (socket !== ws) return;
 			isConnected = true;
-			if (isSoloMode && !gameStarted) socket?.send('START_GAME');
+			if (isSoloMode && !gameStarted) ws.send('START_GAME');
 		};
 
-		socket.onmessage = (event) => {
+		ws.onmessage = (event) => {
+			if (socket !== ws) return;
 			const data = JSON.parse(event.data);
 			if (data.action === 'GAME_STATE_UPDATE') {
 				isWaitingForHost = false;
@@ -123,7 +127,9 @@
 			}
 		};
 
-		socket.onclose = () => {
+		ws.onclose = () => {
+			// Only react to the close of the currently active socket.
+			if (socket !== ws) return;
 			if (document.visibilityState === 'visible') quitRoom();
 		};
 	}
@@ -142,29 +148,12 @@
 		if (socket) {
 			if (socket.readyState === WebSocket.OPEN) socket.send('LEAVE_ROOM');
 			socket.onclose = null;
-			setTimeout(() => {
-				if (socket) socket.close();
-				socket = null;
-			}, 50);
+			socket.close();
+			socket = null;
 		}
 		localStorage.removeItem('sueca_room_code');
 		localStorage.removeItem('sueca_is_solo');
-
-		isConnected = false;
-		isWaitingForHost = false;
-		gameStarted = false;
-		showGameOverModal = false;
-		gameOverData = null;
-		myHand = [];
-		table = [];
-		playersList = [];
-		approvalRequests = [];
-		currentRoomCode = '';
-		activePlayerId = '';
-		myPlayerId = '';
-		ownerId = '';
-		dealerId = '';
-		setTimeout(fetchRooms, 200);
+		window.location.reload();
 	}
 </script>
 
