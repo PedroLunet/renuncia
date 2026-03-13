@@ -463,7 +463,7 @@ export class GameRoom extends DurableObject {
 				await this.saveState();
 				this.broadcastGameState();
 				this.processTurn();
-			}, 2000);
+			}, 1000);
 			return;
 		}
 		this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
