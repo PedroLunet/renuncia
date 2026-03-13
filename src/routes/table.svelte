@@ -5,6 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
 
+	// --- TYPES ---
 	export interface Card {
 		suit: 'copas' | 'espadas' | 'ouros' | 'paus';
 		rank: '2' | '3' | '4' | '5' | '6' | 'Q' | 'J' | 'K' | '7' | 'A';
@@ -67,35 +68,48 @@
 	let playerNorth = $derived(playersList[(myIndex + 2) % 4]);
 	let playerWest = $derived(playersList[(myIndex + 3) % 4]);
 
-	let handNorth = $derived(playerNorth ? Array(handSizes[playerNorth.id] || 0).fill(null) : []);
-	let handEast = $derived(playerEast ? Array(handSizes[playerEast.id] || 0).fill(null) : []);
-	let handWest = $derived(playerWest ? Array(handSizes[playerWest.id] || 0).fill(null) : []);
-	let handSouthCount = $derived(playerSouth ? handSizes[playerSouth.id] || 0 : 0);
+	function getHandArray(size: number): number[] {
+		const arr = [];
+		for (let i = 0; i < size; i++) arr.push(i);
+		return arr;
+	}
+
+	let handNorth = $derived(playerNorth ? getHandArray(handSizes[playerNorth.id] || 0) : []);
+	let handEast = $derived(playerEast ? getHandArray(handSizes[playerEast.id] || 0) : []);
+	let handWest = $derived(playerWest ? getHandArray(handSizes[playerWest.id] || 0) : []);
 
 	let isStartOfRound = $derived(
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
 
 	let lastPlayedCardRect: DOMRect | null = null;
+	let cachedDeckCenter: { x: number; y: number } | null = null;
+
+	$effect(() => {
+		if (isStartOfRound) cachedDeckCenter = null;
+	});
 
 	function handlePlayCard(index: number) {
 		const card = myHand[index];
 		const el = document.getElementById(`my-card-${card.suit}-${card.rank}`);
-		if (el) {
-			lastPlayedCardRect = el.getBoundingClientRect();
-		}
+		if (el) lastPlayedCardRect = el.getBoundingClientRect();
 		playCard(index);
 	}
 
+	function getPlayedCard(playerId: string | undefined): Card | null {
+		if (!playerId) return null;
+		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
+	}
+
 	function playAnimation(node: HTMLElement, { playerId }: { playerId: string }) {
-		tick().then(() => {
+		setTimeout(() => {
 			const isMe = playerId === myPlayerId;
 			let sourceRect: DOMRect | null = null;
 			let initialRotation = 0;
 
 			if (isMe && lastPlayedCardRect) {
 				sourceRect = lastPlayedCardRect;
-				lastPlayedCardRect = null; // Reset
+				lastPlayedCardRect = null;
 			} else if (!isMe) {
 				const count = handSizes[playerId] || 0;
 				if (count > 0) {
@@ -110,7 +124,6 @@
 				const targetRect = node.getBoundingClientRect();
 				const deltaX = sourceRect.left - targetRect.left;
 				const deltaY = sourceRect.top - targetRect.top;
-
 				const targetRotation =
 					playerId === playerEast?.id ? -90 : playerId === playerWest?.id ? 90 : 0;
 
@@ -122,7 +135,7 @@
 						y: 0,
 						rotation: targetRotation,
 						scale: 1,
-						duration: 0.5,
+						duration: 0.4,
 						ease: 'power2.out',
 						clearProps: 'transform'
 					}
@@ -130,8 +143,7 @@
 			} else {
 				gsap.from(node, { scale: 0, opacity: 0, duration: 0.3 });
 			}
-		});
-
+		}, 10);
 		return {
 			destroy() {
 				gsap.killTweensOf(node);
@@ -139,117 +151,173 @@
 		};
 	}
 
-	function getPlayedCard(playerId: string | undefined): Card | null {
-		if (!playerId) return null;
-		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
-	}
-
+	// --- MASTER DEALING ILLUSION ---
 	function dealAnimation(
 		node: HTMLElement,
-		{ index = 0, playerOffset = 0 }: { index: number; playerOffset: number }
+		args: { index: number; playerOffset: number; isStart: boolean }
 	) {
-		if (!isStartOfRound) {
-			node.style.opacity = '1';
-			return;
-		}
-		node.style.opacity = '0';
-		tick().then(() => {
-			const deckEl = document.getElementById('deck');
-			if (!deckEl) {
+		function applyAnim({ index, playerOffset, isStart }: any) {
+			if (!isStart) {
 				node.style.opacity = '1';
+				gsap.set(node, { clearProps: 'all' });
 				return;
 			}
-			const deckRect = deckEl.getBoundingClientRect();
-			const cardRect = node.getBoundingClientRect();
-			const deltaX = deckRect.left + deckRect.width / 2 - (cardRect.left + cardRect.width / 2);
-			const deltaY = deckRect.top + deckRect.height / 2 - (cardRect.top + cardRect.height / 2);
-			const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
-			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
-			const isDealer = playerOffset === dOffset;
-			const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
 
-			if (isDealer && index === 9) {
-				gsap.fromTo(
-					node,
-					{ x: deltaX + 80, y: deltaY, scale: 1, rotationY: playerOffset === 0 ? 0 : 90 },
-					{
-						x: 0,
-						y: 0,
-						scale: 1,
-						rotationY: 0,
-						duration: 0.4,
-						delay: playerOffset === 0 ? 2.6 : 2.8,
-						ease: 'back.out(1.2)',
-						onStart: () => {
-							node.style.opacity = '1';
-						},
-						onComplete: () => {
-							gsap.set(node, { clearProps: 'all' });
-						}
+			node.style.opacity = '0';
+
+			setTimeout(() => {
+				if (!cachedDeckCenter) {
+					const deckEl = document.getElementById('deck');
+					if (deckEl) {
+						const r = deckEl.getBoundingClientRect();
+						cachedDeckCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+					} else {
+						cachedDeckCenter = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 					}
-				);
-			} else {
-				let delayTime = 0.5 + (dealTurn * 10 + index) * 0.05;
-				gsap.fromTo(
-					node,
-					{ x: deltaX, y: deltaY, scale: 0.2, rotation: Math.random() * 180 - 90 },
-					{
-						x: 0,
-						y: 0,
-						scale: 1,
-						rotation: 0,
-						duration: 0.4,
-						delay: delayTime,
-						ease: 'power2.out',
-						onStart: () => {
-							node.style.opacity = '1';
+				}
+
+				const cardRect = node.getBoundingClientRect();
+				const cardCenter = {
+					x: cardRect.left + cardRect.width / 2,
+					y: cardRect.top + cardRect.height / 2
+				};
+
+				const deltaX = cachedDeckCenter.x - cardCenter.x;
+				const deltaY = cachedDeckCenter.y - cardCenter.y;
+
+				const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
+				const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
+				const isDealer = playerOffset === dOffset;
+				const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
+
+				// ILLUSION FIX 1: Start scale mathematically identical to the 64x96 deck
+				const isMe = playerOffset === 0;
+				const startScale = isMe ? 0.666 : 1.333;
+
+				if (isDealer && index === 9) {
+					// Trunfo Merge
+					gsap.fromTo(
+						node,
+						{
+							x: deltaX + 80,
+							y: deltaY,
+							scale: startScale,
+							rotationY: playerOffset === 0 ? 0 : 90,
+							zIndex: 100
 						},
-						onComplete: () => {
-							gsap.set(node, { clearProps: 'all' });
+						{
+							x: 0,
+							y: 0,
+							scale: 1,
+							rotationY: 0,
+							duration: 0.4,
+							delay: playerOffset === 0 ? 2.6 : 2.8,
+							ease: 'back.out(1.2)',
+							onStart: () => {
+								node.style.opacity = '1';
+							},
+							clearProps: 'all'
 						}
-					}
-				);
-			}
-		});
+					);
+				} else {
+					// Standard Spree Deal
+					let delayTime = 0.5 + (dealTurn * 10 + index) * 0.05;
+					gsap.fromTo(
+						node,
+						// ILLUSION FIX 2: zIndex 100 puts it over the deck, rotation starts barely skewed for realism
+						{
+							x: deltaX,
+							y: deltaY,
+							scale: startScale,
+							rotation: Math.random() * 20 - 10,
+							zIndex: 100
+						},
+						{
+							x: 0,
+							y: 0,
+							scale: 1,
+							rotation: 0,
+							duration: 0.4,
+							delay: delayTime,
+							ease: 'power2.out',
+							onStart: () => {
+								node.style.opacity = '1';
+							},
+							clearProps: 'all'
+						}
+					);
+				}
+			}, 50);
+		}
+		applyAnim(args);
 		return {
+			update(newArgs: any) {
+				applyAnim(newArgs);
+			},
 			destroy() {
 				gsap.killTweensOf(node);
 			}
 		};
 	}
 
-	function ghostTrunfoAnim(node: HTMLElement) {
-		if (!isStartOfRound) {
-			node.style.display = 'none';
-			return;
+	function ghostTrunfoAnim(node: HTMLElement, isStart: boolean) {
+		function applyAnim(start: boolean) {
+			if (!start) {
+				gsap.set(node, { opacity: 0, display: 'none' });
+				return;
+			}
+			gsap.set(node, { display: 'block', opacity: 1, scale: 1, x: 0, y: 0, rotationY: 0 });
+			const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
+			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
+
+			const tl = gsap.timeline();
+			tl.to(node, { x: 80, duration: 0.4, ease: 'power2.out' });
+			tl.to(node, { duration: 2.2 }); // Wait for 39 cards to deal
+
+			if (dOffset === 0) {
+				tl.to(node, { opacity: 0, duration: 0 }); // Instantly vanish at 2.6s as my hand takes over
+			} else {
+				tl.to(node, { rotationY: -90, duration: 0.2, ease: 'power1.inOut' });
+				tl.to(node, { opacity: 0, duration: 0 }); // Vanish at 2.8s as opponent hand takes over
+			}
 		}
-		const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
-		const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
-		const tl = gsap.timeline();
-		tl.set(node, { opacity: 1, scale: 0.2, x: 0, y: 0, rotationY: 0 });
-		tl.to(node, { x: 80, scale: 1, duration: 0.4, ease: 'power2.out' });
-		tl.to(node, { duration: 2.2 });
-		if (dOffset === 0) {
-			tl.to(node, { opacity: 0, duration: 0 });
-		} else {
-			tl.to(node, { rotationY: -90, duration: 0.2, ease: 'power1.inOut' });
-			tl.to(node, { opacity: 0, duration: 0 });
-		}
+		applyAnim(isStart);
 		return {
+			update(newStart: boolean) {
+				applyAnim(newStart);
+			},
 			destroy() {
-				tl.kill();
+				gsap.killTweensOf(node);
 			}
 		};
 	}
 
-	function deckAnim(node: HTMLElement) {
-		if (!isStartOfRound) {
-			node.style.opacity = '0';
-			return;
+	// ILLUSION FIX 3: Deplete the deck layer by layer, perfectly synced with the math
+	function deckAnim(node: HTMLElement, isStart: boolean) {
+		function applyAnim(start: boolean) {
+			const l1 = node.querySelector('.deck-layer-1');
+			const l2 = node.querySelector('.deck-layer-2');
+			const l3 = node.querySelector('.deck-layer-3');
+
+			if (!start) {
+				gsap.set([l1, l2, l3], { opacity: 0 });
+				return;
+			}
+
+			gsap.set(l1, { opacity: 0.4 });
+			gsap.set(l2, { opacity: 0.7 });
+			gsap.set(l3, { opacity: 1 });
+
+			// Deal mathematically finishes at 2.4s. Deplete visually as it happens!
+			gsap.to(l1, { opacity: 0, duration: 0.1, delay: 1.0 }); // 1st third gone
+			gsap.to(l2, { opacity: 0, duration: 0.1, delay: 1.8 }); // 2nd third gone
+			gsap.to(l3, { opacity: 0, duration: 0, delay: 2.4 }); // Last card takes off!
 		}
-		node.style.opacity = '1';
-		gsap.to(node, { opacity: 0, duration: 0.5, delay: 3.0 });
+		applyAnim(isStart);
 		return {
+			update(newStart: boolean) {
+				applyAnim(newStart);
+			},
 			destroy() {
 				gsap.killTweensOf(node);
 			}
@@ -313,10 +381,10 @@
 			<div class="flex flex-col items-center gap-4 transition-all">
 				{#if handNorth.length > 0}
 					<div class="flex -space-x-6">
-						{#each handNorth as _, index}
+						{#each handNorth as cardIndex (cardIndex + '-' + (trumpCard?.suit || ''))}
 							<div
-								use:dealAnimation={{ index, playerOffset: 2 }}
-								id="hand-{playerNorth.id}-card-{index}"
+								use:dealAnimation={{ index: cardIndex, playerOffset: 2, isStart: isStartOfRound }}
+								id="hand-{playerNorth.id}-card-{cardIndex}"
 							>
 								<img
 									src="/cards/back.svg"
@@ -356,10 +424,10 @@
 				</div>
 				{#if handWest.length > 0}
 					<div class="flex flex-col -space-y-8">
-						{#each handWest as _, index}
+						{#each handWest as cardIndex (cardIndex + '-' + (trumpCard?.suit || ''))}
 							<div
-								use:dealAnimation={{ index, playerOffset: 3 }}
-								id="hand-{playerWest.id}-card-{index}"
+								use:dealAnimation={{ index: cardIndex, playerOffset: 3, isStart: isStartOfRound }}
+								id="hand-{playerWest.id}-card-{cardIndex}"
 							>
 								<img
 									src="/cards/back.svg"
@@ -378,30 +446,30 @@
 		<div class="relative h-64 w-64">
 			<div
 				id="deck"
-				use:deckAnim
+				use:deckAnim={isStartOfRound}
 				class="pointer-events-none absolute top-1/2 left-1/2 z-0 h-24 w-16 -translate-x-1/2 -translate-y-1/2"
 			>
 				<img
 					src="/cards/back.svg"
+					alt=""
+					class="deck-layer-1 absolute top-2 left-2 -z-30 h-full w-full drop-shadow-md"
+				/>
+				<img
+					src="/cards/back.svg"
+					alt=""
+					class="deck-layer-2 absolute top-1 left-1 -z-20 h-full w-full drop-shadow-md"
+				/>
+				<img
+					src="/cards/back.svg"
 					alt="Deck"
-					class="h-full w-full drop-shadow-2xl"
+					class="deck-layer-3 absolute top-0 left-0 h-full w-full drop-shadow-2xl"
 					draggable="false"
-				/>
-				<img
-					src="/cards/back.svg"
-					alt=""
-					class="absolute top-0.5 left-0.5 -z-10 h-full w-full opacity-50"
-				/>
-				<img
-					src="/cards/back.svg"
-					alt=""
-					class="absolute top-1 left-1 -z-20 h-full w-full opacity-20"
 				/>
 			</div>
 
 			{#if trumpCard}
 				<img
-					use:ghostTrunfoAnim
+					use:ghostTrunfoAnim={isStartOfRound}
 					src="/cards/{trumpCard.suit}-{trumpCard.rank}.svg"
 					alt="Trunfo"
 					class="pointer-events-none absolute top-1/2 left-1/2 z-10 h-24 w-16 -translate-x-1/2 -translate-y-1/2 drop-shadow-2xl"
@@ -469,10 +537,10 @@
 			<div class="flex flex-row items-center gap-6 transition-all">
 				{#if handEast.length > 0}
 					<div class="flex flex-col -space-y-8">
-						{#each handEast as _, index}
+						{#each handEast as cardIndex (cardIndex + '-' + (trumpCard?.suit || ''))}
 							<div
-								use:dealAnimation={{ index, playerOffset: 1 }}
-								id="hand-{playerEast.id}-card-{index}"
+								use:dealAnimation={{ index: cardIndex, playerOffset: 1, isStart: isStartOfRound }}
+								id="hand-{playerEast.id}-card-{cardIndex}"
 							>
 								<img
 									src="/cards/back.svg"
@@ -515,15 +583,14 @@
 		<div class="relative flex h-32 w-full max-w-3xl justify-center gap-2">
 			{#each myHand as card, index (card.suit + card.rank)}
 				<div
-					use:dealAnimation={{ index, playerOffset: 0 }}
+					use:dealAnimation={{ index, playerOffset: 0, isStart: isStartOfRound }}
 					animate:flip={{ duration: 400 }}
 					id="my-card-{card.suit}-{card.rank}"
 					class="h-36 w-24"
 				>
 					<button
 						onclick={() => handlePlayCard(index)}
-						class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-500 hover:z-50
-            {isMyTurn
+						class="group relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-500 hover:z-50 {isMyTurn
 							? 'cursor-pointer hover:-translate-y-8 hover:drop-shadow-[0_0_25px_rgba(255,255,255,0.3)]'
 							: 'cursor-not-allowed opacity-60 hover:-translate-y-2'}"
 						style="transform: translateY({Math.abs(index - myHand.length / 2) *
