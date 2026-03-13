@@ -558,29 +558,33 @@
 			{#if !gameStarted}
 				<div class="absolute inset-0 z-50 flex items-center justify-center">
 					<div
-						class="w-full min-w-[320px] rounded-xl border border-emerald-700 bg-emerald-800/90 p-6 text-center shadow-2xl backdrop-blur-md"
+						class="w-full min-w-[320px] rounded-xl border border-neutral-800 bg-[#0c0c0c]/95 p-6 text-center shadow-2xl backdrop-blur-md"
 					>
-						<h1 class="mb-2 text-2xl font-bold text-amber-400">
-							{#if ownerId === myPlayerId}👑 You are the Host!{:else}Waiting for players...{/if}
+						<h1 class="mb-1 text-[10px] font-light tracking-[0.3em] text-neutral-500 uppercase">
+							{#if ownerId === myPlayerId}Host{:else}Waiting{/if}
 						</h1>
-						<p class="mb-6 text-emerald-200">Players in room: {playersList.length}/4</p>
+						<p class="mb-6 text-2xl font-light tracking-widest text-text">
+							{playersList.length}<span class="text-neutral-600">/4</span>
+						</p>
 
 						{#if ownerId === myPlayerId && approvalRequests.length > 0}
 							<div class="mb-4 space-y-2">
 								{#each approvalRequests as reqId}
 									<div
-										class="flex items-center justify-between rounded border border-emerald-700 bg-emerald-950 p-2"
+										class="flex items-center justify-between rounded border border-neutral-800 bg-neutral-900 p-2"
 									>
-										<span class="text-xs font-bold">{reqId}</span>
+										<span class="font-mono text-xs font-light tracking-widest text-neutral-400"
+											>{reqId}</span
+										>
 										<div class="flex gap-1">
 											<button
 												onclick={() => socket?.send(`DECLINE_PLAYER:${reqId}`)}
-												class="rounded bg-red-900/50 px-2 py-1 text-[10px] font-bold text-red-400 uppercase hover:bg-red-800"
+												class="rounded border border-neutral-700 px-3 py-1 text-[10px] tracking-[0.15em] text-neutral-500 uppercase transition-colors hover:border-neutral-500 hover:text-text"
 												>No</button
 											>
 											<button
 												onclick={() => socket?.send(`ACCEPT_PLAYER:${reqId}`)}
-												class="rounded bg-amber-500 px-2 py-1 text-[10px] font-bold text-emerald-950 uppercase hover:bg-amber-400"
+												class="rounded border border-neutral-500 bg-neutral-800 px-3 py-1 text-[10px] tracking-[0.15em] text-text uppercase transition-colors hover:bg-neutral-700"
 												>Yes</button
 											>
 										</div>
@@ -592,11 +596,13 @@
 						{#if ownerId === myPlayerId}
 							<button
 								onclick={() => socket?.send('START_GAME')}
-								class="w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-text shadow-lg transition-transform hover:-translate-y-1 hover:bg-emerald-500"
-								>Start Game Now</button
+								class="w-full rounded-lg border border-neutral-700 bg-neutral-900 py-3 text-[10px] font-light tracking-[0.2em] text-text uppercase transition-all hover:border-neutral-500 hover:bg-neutral-800"
+								>Start Game</button
 							>
 						{:else}
-							<div class="text-xs text-emerald-400 italic">Waiting for host to start...</div>
+							<div class="text-[10px] font-light tracking-[0.2em] text-neutral-600 uppercase">
+								Waiting for host...
+							</div>
 						{/if}
 					</div>
 				</div>
