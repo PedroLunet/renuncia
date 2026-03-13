@@ -5,6 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
 
+	// --- TYPES ---
 	export interface Card {
 		suit: 'copas' | 'espadas' | 'ouros' | 'paus';
 		rank: '2' | '3' | '4' | '5' | '6' | 'Q' | 'J' | 'K' | '7' | 'A';
@@ -103,17 +104,15 @@
 		playCard(index);
 	}
 
-	function getPlayedCard(playerId: string | undefined): Card | null {
-		if (!playerId) return null;
-		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
-	}
-
+	// --- REBUILT & BULLETPROOF 3-STEP ANIMATION ---
 	function trickVanish(node: HTMLElement, { initialRot = 0 }) {
 		const rect = node.getBoundingClientRect();
 
+		// Relative target 1: The exact center of the screen
 		const centerTargetX = window.innerWidth / 2 - (rect.left + rect.width / 2);
 		const centerTargetY = window.innerHeight / 2 - (rect.top + rect.height / 2);
 
+		// Relative target 2: The Won Tricks Pile (bottom-right)
 		const pileTargetX = window.innerWidth - 32 - 25.6 - (rect.left + rect.width / 2);
 		const pileTargetY = window.innerHeight - 32 - 38.4 - (rect.top + rect.height / 2);
 
@@ -122,7 +121,8 @@
 
 		return {
 			duration: 1500,
-			css: (t: number, u: number) => {
+			// FIX: Changed from `css:` to `tick:`. This runs JavaScript every single frame!
+			tick: (t: number, u: number) => {
 				let x = 0,
 					y = 0,
 					rotZ = initialRot,
@@ -130,21 +130,25 @@
 					scale = 1;
 
 				if (u < 0.3) {
+					// STEP 1: Slide to center & stack (0% - 30%)
 					const p = cubicOut(u / 0.3);
 					x = centerTargetX * p;
 					y = centerTargetY * p;
 					rotZ = initialRot * (1 - p);
 				} else if (u < 0.5) {
+					// PAUSE: Let user register the perfect face-up stack (30% - 50%)
 					x = centerTargetX;
 					y = centerTargetY;
 					rotZ = 0;
 				} else if (u < 0.7) {
+					// STEP 2: Flip the stack upside down (50% - 70%)
 					const p = (u - 0.5) / 0.2;
 					x = centerTargetX;
 					y = centerTargetY;
 					rotZ = 0;
 					rotY = 180 * p;
 				} else {
+					// STEP 3: Fly to corner pile & shrink (70% - 100%)
 					const p = cubicOut((u - 0.7) / 0.3);
 					x = centerTargetX + (pileTargetX - centerTargetX) * p;
 					y = centerTargetY + (pileTargetY - centerTargetY) * p;
@@ -153,6 +157,7 @@
 					scale = 1 - 0.2 * p;
 				}
 
+				// PERFECT IMAGE SWAP
 				if (rotY > 90) {
 					if (faceImg) faceImg.style.display = 'none';
 					if (backImg) backImg.style.display = 'block';
@@ -161,11 +166,10 @@
 					if (backImg) backImg.style.display = 'none';
 				}
 
-				return `
-          transform: translate(${x}px, ${y}px) rotateZ(${rotZ}deg) rotateY(${rotY}deg) scale(${scale});
-          transform-style: preserve-3d;
-          z-index: 9999;
-        `;
+				// Applies clean relative transforms directly to the node
+				node.style.transform = `translate(${x}px, ${y}px) rotateZ(${rotZ}deg) rotateY(${rotY}deg) scale(${scale})`;
+				node.style.transformStyle = 'preserve-3d';
+				node.style.zIndex = '9999';
 			}
 		};
 	}
@@ -443,7 +447,7 @@
 			<img
 				src="/cards/back.svg"
 				alt="Pile"
-				class="absolute top-1 left-1 -z-10 h-full w-full drop-shadow-lg"
+				class="absolute top-1 left-1 -z-10 h-full w-full opacity-40 drop-shadow-lg"
 				draggable="false"
 			/>
 		</div>
@@ -562,7 +566,7 @@
 				/>
 			{/if}
 
-			{#if getPlayedCard(playerNorth?.id)}
+			{#each table.filter((p) => playerNorth && p.playerId === playerNorth.id) as play (play.card.suit + '-' + play.card.rank)}
 				<div
 					use:playAnimation={{ playerId: playerNorth.id }}
 					out:trickVanish={{ initialRot: 0 }}
@@ -570,8 +574,7 @@
 					style="width: 64px; height: 96px; top: 16px; left: calc(50% - 32px);"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerNorth?.id)?.suit}-{getPlayedCard(playerNorth?.id)
-							?.rank}.svg"
+						src="/cards/{play.card.suit}-{play.card.rank}.svg"
 						alt="Face"
 						class="card-face absolute inset-0 h-full w-full object-contain"
 					/>
@@ -579,12 +582,12 @@
 						src="/cards/back.svg"
 						alt="Back"
 						class="card-back absolute inset-0 h-full w-full object-contain"
-						style="display: none;"
+						style="display: none; transform: scaleX(-1);"
 					/>
 				</div>
-			{/if}
+			{/each}
 
-			{#if getPlayedCard(playerSouth?.id)}
+			{#each table.filter((p) => playerSouth && p.playerId === playerSouth.id) as play (play.card.suit + '-' + play.card.rank)}
 				<div
 					use:playAnimation={{ playerId: playerSouth.id }}
 					out:trickVanish={{ initialRot: 0 }}
@@ -592,8 +595,7 @@
 					style="width: 64px; height: 96px; bottom: 16px; left: calc(50% - 32px);"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerSouth?.id)?.suit}-{getPlayedCard(playerSouth?.id)
-							?.rank}.svg"
+						src="/cards/{play.card.suit}-{play.card.rank}.svg"
 						alt="Face"
 						class="card-face absolute inset-0 h-full w-full object-contain"
 					/>
@@ -601,12 +603,12 @@
 						src="/cards/back.svg"
 						alt="Back"
 						class="card-back absolute inset-0 h-full w-full object-contain"
-						style="display: none;"
+						style="display: none; transform: scaleX(-1);"
 					/>
 				</div>
-			{/if}
+			{/each}
 
-			{#if getPlayedCard(playerWest?.id)}
+			{#each table.filter((p) => playerWest && p.playerId === playerWest.id) as play (play.card.suit + '-' + play.card.rank)}
 				<div
 					use:playAnimation={{ playerId: playerWest.id }}
 					out:trickVanish={{ initialRot: 90 }}
@@ -614,8 +616,7 @@
 					style="width: 64px; height: 96px; left: 16px; top: calc(50% - 48px); transform: rotate(90deg);"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerWest?.id)?.suit}-{getPlayedCard(playerWest?.id)
-							?.rank}.svg"
+						src="/cards/{play.card.suit}-{play.card.rank}.svg"
 						alt="Face"
 						class="card-face absolute inset-0 h-full w-full object-contain"
 					/>
@@ -623,12 +624,12 @@
 						src="/cards/back.svg"
 						alt="Back"
 						class="card-back absolute inset-0 h-full w-full object-contain"
-						style="display: none;"
+						style="display: none; transform: scaleX(-1);"
 					/>
 				</div>
-			{/if}
+			{/each}
 
-			{#if getPlayedCard(playerEast?.id)}
+			{#each table.filter((p) => playerEast && p.playerId === playerEast.id) as play (play.card.suit + '-' + play.card.rank)}
 				<div
 					use:playAnimation={{ playerId: playerEast.id }}
 					out:trickVanish={{ initialRot: -90 }}
@@ -636,8 +637,7 @@
 					style="width: 64px; height: 96px; right: 16px; top: calc(50% - 48px); transform: rotate(-90deg);"
 				>
 					<img
-						src="/cards/{getPlayedCard(playerEast?.id)?.suit}-{getPlayedCard(playerEast?.id)
-							?.rank}.svg"
+						src="/cards/{play.card.suit}-{play.card.rank}.svg"
 						alt="Face"
 						class="card-face absolute inset-0 h-full w-full object-contain"
 					/>
@@ -645,10 +645,10 @@
 						src="/cards/back.svg"
 						alt="Back"
 						class="card-back absolute inset-0 h-full w-full object-contain"
-						style="display: none;"
+						style="display: none; transform: scaleX(-1);"
 					/>
 				</div>
-			{/if}
+			{/each}
 		</div>
 
 		{#if playerEast}
