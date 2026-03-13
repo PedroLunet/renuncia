@@ -151,7 +151,6 @@
 		};
 	}
 
-	// --- MASTER DEALING ILLUSION ---
 	function dealAnimation(
 		node: HTMLElement,
 		args: { index: number; playerOffset: number; isStart: boolean }
@@ -190,12 +189,11 @@
 				const isDealer = playerOffset === dOffset;
 				const dealTurn = (playerOffset - dOffset - 1 + 4) % 4;
 
-				// ILLUSION FIX 1: Start scale mathematically identical to the 64x96 deck
+				// PERFECT SCALE: Cards start exactly the size of the 64x96 center deck
 				const isMe = playerOffset === 0;
 				const startScale = isMe ? 0.666 : 1.333;
 
 				if (isDealer && index === 9) {
-					// Trunfo Merge
 					gsap.fromTo(
 						node,
 						{
@@ -220,11 +218,9 @@
 						}
 					);
 				} else {
-					// Standard Spree Deal
 					let delayTime = 0.5 + (dealTurn * 10 + index) * 0.05;
 					gsap.fromTo(
 						node,
-						// ILLUSION FIX 2: zIndex 100 puts it over the deck, rotation starts barely skewed for realism
 						{
 							x: deltaX,
 							y: deltaY,
@@ -272,13 +268,13 @@
 
 			const tl = gsap.timeline();
 			tl.to(node, { x: 80, duration: 0.4, ease: 'power2.out' });
-			tl.to(node, { duration: 2.2 }); // Wait for 39 cards to deal
+			tl.to(node, { duration: 2.2 });
 
 			if (dOffset === 0) {
-				tl.to(node, { opacity: 0, duration: 0 }); // Instantly vanish at 2.6s as my hand takes over
+				tl.to(node, { opacity: 0, duration: 0 });
 			} else {
 				tl.to(node, { rotationY: -90, duration: 0.2, ease: 'power1.inOut' });
-				tl.to(node, { opacity: 0, duration: 0 }); // Vanish at 2.8s as opponent hand takes over
+				tl.to(node, { opacity: 0, duration: 0 });
 			}
 		}
 		applyAnim(isStart);
@@ -287,31 +283,40 @@
 				applyAnim(newStart);
 			},
 			destroy() {
-				gsap.killTweensOf(node);
+				tl.kill();
 			}
 		};
 	}
 
-	// ILLUSION FIX 3: Deplete the deck layer by layer, perfectly synced with the math
+	// --- CONTINUOUS DECK DEPLETION ILLUSION ---
 	function deckAnim(node: HTMLElement, isStart: boolean) {
 		function applyAnim(start: boolean) {
 			const l1 = node.querySelector('.deck-layer-1');
 			const l2 = node.querySelector('.deck-layer-2');
-			const l3 = node.querySelector('.deck-layer-3');
 
 			if (!start) {
-				gsap.set([l1, l2, l3], { opacity: 0 });
+				gsap.set(node, { opacity: 0 });
 				return;
 			}
 
-			gsap.set(l1, { opacity: 0.4 });
-			gsap.set(l2, { opacity: 0.7 });
-			gsap.set(l3, { opacity: 1 });
+			gsap.set(node, { opacity: 1 });
 
-			// Deal mathematically finishes at 2.4s. Deplete visually as it happens!
-			gsap.to(l1, { opacity: 0, duration: 0.1, delay: 1.0 }); // 1st third gone
-			gsap.to(l2, { opacity: 0, duration: 0.1, delay: 1.8 }); // 2nd third gone
-			gsap.to(l3, { opacity: 0, duration: 0, delay: 2.4 }); // Last card takes off!
+			// Set initial "thickness" by shifting layers down and right
+			gsap.set(l1, { x: 8, y: 8, opacity: 0.4 });
+			gsap.set(l2, { x: 4, y: 4, opacity: 0.7 });
+
+			// Continuously compress the thickness to 0 over the dealing period
+			gsap.to([l1, l2], {
+				x: 0,
+				y: 0,
+				opacity: 0,
+				duration: 2.0, // Squeezes down smoothly
+				delay: 0.5, // Starts right as dealing starts
+				ease: 'none' // Linear ease makes it look like physical cards leaving
+			});
+
+			// The central card perfectly vanishes the millisecond the last regular card takes off
+			gsap.set(node, { opacity: 0, delay: 2.5 });
 		}
 		applyAnim(isStart);
 		return {
@@ -320,6 +325,7 @@
 			},
 			destroy() {
 				gsap.killTweensOf(node);
+				gsap.killTweensOf(node.children);
 			}
 		};
 	}
@@ -452,12 +458,12 @@
 				<img
 					src="/cards/back.svg"
 					alt=""
-					class="deck-layer-1 absolute top-2 left-2 -z-30 h-full w-full drop-shadow-md"
+					class="deck-layer-1 absolute top-0 left-0 -z-30 h-full w-full drop-shadow-md"
 				/>
 				<img
 					src="/cards/back.svg"
 					alt=""
-					class="deck-layer-2 absolute top-1 left-1 -z-20 h-full w-full drop-shadow-md"
+					class="deck-layer-2 absolute top-0 left-0 -z-20 h-full w-full drop-shadow-md"
 				/>
 				<img
 					src="/cards/back.svg"
