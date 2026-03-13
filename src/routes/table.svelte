@@ -82,7 +82,10 @@
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
 
-	let trickCollected = $state(false);
+	let trickCollected = $state(
+		10 - myHand.length - (table.some((p) => p.playerId === myPlayerId) ? 1 : 0) > 0
+	);
+
 	let lastPlayedCardRect: DOMRect | null = null;
 	let cachedDeckCenter: { x: number; y: number } | null = null;
 
@@ -104,15 +107,17 @@
 		playCard(index);
 	}
 
-	// --- REBUILT & BULLETPROOF 3-STEP ANIMATION ---
+	function getPlayedCard(playerId: string | undefined): Card | null {
+		if (!playerId) return null;
+		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
+	}
+
 	function trickVanish(node: HTMLElement, { initialRot = 0 }) {
 		const rect = node.getBoundingClientRect();
 
-		// Relative target 1: The exact center of the screen
 		const centerTargetX = window.innerWidth / 2 - (rect.left + rect.width / 2);
 		const centerTargetY = window.innerHeight / 2 - (rect.top + rect.height / 2);
 
-		// Relative target 2: The Won Tricks Pile (bottom-right)
 		const pileTargetX = window.innerWidth - 32 - 25.6 - (rect.left + rect.width / 2);
 		const pileTargetY = window.innerHeight - 32 - 38.4 - (rect.top + rect.height / 2);
 
@@ -121,7 +126,6 @@
 
 		return {
 			duration: 1500,
-			// FIX: Changed from `css:` to `tick:`. This runs JavaScript every single frame!
 			tick: (t: number, u: number) => {
 				let x = 0,
 					y = 0,
@@ -130,25 +134,21 @@
 					scale = 1;
 
 				if (u < 0.3) {
-					// STEP 1: Slide to center & stack (0% - 30%)
 					const p = cubicOut(u / 0.3);
 					x = centerTargetX * p;
 					y = centerTargetY * p;
 					rotZ = initialRot * (1 - p);
 				} else if (u < 0.5) {
-					// PAUSE: Let user register the perfect face-up stack (30% - 50%)
 					x = centerTargetX;
 					y = centerTargetY;
 					rotZ = 0;
 				} else if (u < 0.7) {
-					// STEP 2: Flip the stack upside down (50% - 70%)
 					const p = (u - 0.5) / 0.2;
 					x = centerTargetX;
 					y = centerTargetY;
 					rotZ = 0;
 					rotY = 180 * p;
 				} else {
-					// STEP 3: Fly to corner pile & shrink (70% - 100%)
 					const p = cubicOut((u - 0.7) / 0.3);
 					x = centerTargetX + (pileTargetX - centerTargetX) * p;
 					y = centerTargetY + (pileTargetY - centerTargetY) * p;
@@ -157,7 +157,6 @@
 					scale = 1 - 0.2 * p;
 				}
 
-				// PERFECT IMAGE SWAP
 				if (rotY > 90) {
 					if (faceImg) faceImg.style.display = 'none';
 					if (backImg) backImg.style.display = 'block';
@@ -166,7 +165,6 @@
 					if (backImg) backImg.style.display = 'none';
 				}
 
-				// Applies clean relative transforms directly to the node
 				node.style.transform = `translate(${x}px, ${y}px) rotateZ(${rotZ}deg) rotateY(${rotY}deg) scale(${scale})`;
 				node.style.transformStyle = 'preserve-3d';
 				node.style.zIndex = '9999';
@@ -176,6 +174,14 @@
 
 	function playAnimation(node: HTMLElement, { playerId }: { playerId: string }) {
 		setTimeout(() => {
+			node.style.zIndex = '';
+			node.style.opacity = '1';
+			node.style.transform = 'none';
+			const faceImg = node.querySelector('.card-face') as HTMLElement;
+			const backImg = node.querySelector('.card-back') as HTMLElement;
+			if (faceImg) faceImg.style.display = 'block';
+			if (backImg) backImg.style.display = 'none';
+
 			const isMe = playerId === myPlayerId;
 			let sourceRect: DOMRect | null = null;
 			let initialRotation = 0;
@@ -202,11 +208,12 @@
 
 				gsap.fromTo(
 					node,
-					{ x: deltaX, y: deltaY, rotation: initialRotation, scale: 0.8 },
+					{ x: deltaX, y: deltaY, rotation: initialRotation, rotationY: 0, scale: 0.8 },
 					{
 						x: 0,
 						y: 0,
 						rotation: targetRotation,
+						rotationY: 0,
 						scale: 1,
 						duration: 0.4,
 						ease: 'power2.out',
@@ -219,7 +226,11 @@
 					}
 				);
 			} else {
-				gsap.from(node, { scale: 0, opacity: 0, duration: 0.3 });
+				gsap.fromTo(
+					node,
+					{ scale: 0, opacity: 0, rotationY: 0 },
+					{ scale: 1, opacity: 1, rotationY: 0, duration: 0.3 }
+				);
 			}
 		}, 10);
 		return {
