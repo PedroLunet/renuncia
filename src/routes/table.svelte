@@ -96,7 +96,7 @@
 		if (isStartOfRound) {
 			cachedDeckCenter = null;
 			trickCollected = false;
-		} else if (table.length === 0 && myHand.length < 10) {
+		} else if (table.length === 0 && myHand.length < 10 && team1Points + team2Points > 0) {
 			setTimeout(() => {
 				trickCollected = true;
 			}, 1300);
