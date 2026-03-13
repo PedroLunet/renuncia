@@ -30,7 +30,7 @@
 	<div class="space-y-8">
 		<div class="space-y-3">
 			<button
-				onclick={() => connectToTable(`SOLO_${localPlayerId}`, true, false)}
+				onclick={() => connectToTable(`SOLO_${generateRoomCode()}`, true, false)}
 				class="w-full rounded-xl border border-neutral-700 bg-neutral-900 py-4 text-xs font-light tracking-[0.2em] text-text uppercase transition-all duration-300 hover:border-neutral-500 hover:bg-neutral-800 hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]"
 			>
 				Play Solo

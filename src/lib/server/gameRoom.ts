@@ -389,10 +389,7 @@ export class GameRoom extends DurableObject {
 			if (this.gameStarted) {
 				this.players[playerIndex].isBot = true;
 				const humanCount = this.players.filter((p) => !p.isBot).length;
-				if (humanCount === 0) {
-					this.gameStarted = false;
-					this.players = [];
-				} else if (this.currentTurnIndex === playerIndex) {
+				if (humanCount > 0 && this.currentTurnIndex === playerIndex) {
 					this.processTurn();
 				}
 			} else {
@@ -403,6 +400,34 @@ export class GameRoom extends DurableObject {
 				const nextHuman = this.players.find((p) => !p.isBot);
 				this.ownerId = nextHuman ? nextHuman.id : null;
 			}
+		}
+
+		// --- NEW: COMPLETE ROOM NUKE IF NO HUMANS LEFT ---
+		const humanCount = this.players.filter((p) => !p.isBot).length;
+		if (humanCount === 0) {
+			// This deletes all saved database history for this room!
+			await this.ctx.storage.deleteAll();
+
+			// Hard reset all server memory variables so next time you hit 'Play Solo', it creates a fresh game.
+			this.isPrivate = false;
+			this.ownerId = null;
+			this.pendingPlayers = [];
+			this.players = [];
+			this.deck = [];
+			this.hands = {};
+			this.trumpCard = null;
+			this.gameStarted = false;
+			this.currentTurnIndex = 0;
+			this.currentTrick = [];
+			this.dealerIndex = 0;
+			this.firstPlayerIndex = 0;
+			this.team1Points = 0;
+			this.team2Points = 0;
+			this.team1MatchPoints = 0;
+			this.team2MatchPoints = 0;
+
+			this.ctx.waitUntil(this.reportToLobby());
+			return; // Exit early, skipping saveState!
 		}
 
 		await this.saveState();
@@ -461,7 +486,7 @@ export class GameRoom extends DurableObject {
 
 					await this.saveState();
 					this.ctx.waitUntil(this.reportToLobby());
-					this.broadcastGameState(); // <--- BROADCAST FULL STATE with gameStarted: false
+					this.broadcastGameState();
 					this.broadcast({
 						action: 'GAME_OVER',
 						t1: this.team1Points,
