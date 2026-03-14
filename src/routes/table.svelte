@@ -84,6 +84,46 @@
 	let handEast = $derived(playerEast ? getHandArray(handSizes[playerEast.id] || 0) : []);
 	let handWest = $derived(playerWest ? getHandArray(handSizes[playerWest.id] || 0) : []);
 
+	const RANK_POWER: Record<string, number> = {
+		A: 10,
+		'7': 9,
+		K: 8,
+		J: 7,
+		Q: 6,
+		'6': 5,
+		'5': 4,
+		'4': 3,
+		'3': 2,
+		'2': 1
+	};
+
+	// Suit order for non-trump groups (arbitrary but stable)
+	const SUIT_ORDER: Record<string, number> = {
+		copas: 0,
+		espadas: 1,
+		ouros: 2,
+		paus: 3
+	};
+
+	let sortedHand = $derived(
+		myHand
+			.map((card: Card, originalIndex: number) => ({ card, originalIndex }))
+			.sort(
+				(a: { card: Card; originalIndex: number }, b: { card: Card; originalIndex: number }) => {
+					const trumpSuit = trumpCard?.suit ?? null;
+					const aIsTrump = a.card.suit === trumpSuit ? 1 : 0;
+					const bIsTrump = b.card.suit === trumpSuit ? 1 : 0;
+					// Trump cards come first
+					if (aIsTrump !== bIsTrump) return bIsTrump - aIsTrump;
+					// Same trump status — group by suit
+					const suitDiff = SUIT_ORDER[a.card.suit] - SUIT_ORDER[b.card.suit];
+					if (suitDiff !== 0) return suitDiff;
+					// Same suit — higher power first (leftmost)
+					return (RANK_POWER[b.card.rank] ?? 0) - (RANK_POWER[a.card.rank] ?? 0);
+				}
+			)
+	);
+
 	let isStartOfRound = $derived(
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
@@ -770,13 +810,13 @@
 		</div>
 
 		<div class="relative flex h-48 w-full max-w-4xl justify-center -space-x-6 px-4 pt-10">
-			{#each myHand as card, index (card.suit + card.rank)}
-				{@const offset = index - (myHand.length - 1) / 2}
+			{#each sortedHand as { card, originalIndex }, sortedIndex (card.suit + card.rank)}
+				{@const offset = sortedIndex - (sortedHand.length - 1) / 2}
 				{@const rot = offset * 2.5}
 				{@const yOffset = Math.pow(offset, 2) * 1.2}
 
 				<div
-					use:dealAnimation={{ index, playerOffset: 0, isStart: isStartOfRound }}
+					use:dealAnimation={{ index: originalIndex, playerOffset: 0, isStart: isStartOfRound }}
 					animate:flip={{ duration: 400 }}
 					id="my-card-{card.suit}-{card.rank}"
 					class="group relative h-36 w-24"
@@ -786,7 +826,7 @@
 						style="transform: translateY({yOffset}px) rotate({rot}deg); transform-origin: bottom center;"
 					>
 						<button
-							onclick={() => handlePlayCard(index)}
+							onclick={() => handlePlayCard(originalIndex)}
 							class="relative flex h-full w-full flex-col justify-between rounded-xl transition-all duration-300 ease-out
                 {isMyTurn
 								? 'cursor-pointer group-hover:-translate-y-8 group-hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]'
