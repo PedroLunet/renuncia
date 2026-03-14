@@ -1,74 +1,106 @@
 import { DurableObject } from 'cloudflare:workers';
+import { dealHands, generateDeck, shuffleDeck } from './deck';
+import {
+	calculateRoundPoints,
+	evaluateTrickWinner,
+	isMatchOver,
+	MATCH_POINTS_TO_WIN
+} from './scoring';
+import type { Card, PersistedGameState, PlayedCard, Player } from './types';
 
-type Suit = 'copas' | 'espadas' | 'ouros' | 'paus';
-type Rank = '2' | '3' | '4' | '5' | '6' | 'Q' | 'J' | 'K' | '7' | 'A';
+// ─── Re-export public types so importers only need this one module ─────────────
+export type { Card, PlayedCard, Player } from './types';
 
-export interface Card {
-	suit: Suit;
-	rank: Rank;
-	value: number;
-}
-export interface Player {
-	id: string;
-	isBot: boolean;
-}
-export interface PlayedCard {
-	playerId: string;
-	card: Card;
-}
+// ─── Blank state used on creation and after a full reset ──────────────────────
+const BLANK_STATE: Omit<PersistedGameState, 'roomCode'> = {
+	isPrivate: false,
+	ownerId: null,
+	pendingPlayers: [],
+	players: [],
+	deck: [],
+	hands: {},
+	trumpCard: null,
+	gameStarted: false,
+	currentTurnIndex: 0,
+	currentTrick: [],
+	dealerIndex: 0,
+	firstPlayerIndex: 0,
+	team1Points: 0,
+	team2Points: 0,
+	team1MatchPoints: 0,
+	team2MatchPoints: 0
+};
 
 export class GameRoom extends DurableObject {
 	env: any;
-	roomCode: string = '';
 
+	// ── Room metadata ──────────────────────────────────────────────────────────
+	roomCode: string = '';
 	isPrivate: boolean = false;
 	ownerId: string | null = null;
 	pendingPlayers: string[] = [];
 
+	// ── Players & cards ────────────────────────────────────────────────────────
 	players: Player[] = [];
 	deck: Card[] = [];
 	hands: Record<string, Card[]> = {};
 	trumpCard: Card | null = null;
-	gameStarted: boolean = false;
 
+	// ── Turn tracking ──────────────────────────────────────────────────────────
+	gameStarted: boolean = false;
 	currentTurnIndex: number = 0;
 	currentTrick: PlayedCard[] = [];
+	dealerIndex: number = 0;
+	firstPlayerIndex: number = 0;
 
+	// ── Scoring ────────────────────────────────────────────────────────────────
 	team1Points: number = 0;
 	team2Points: number = 0;
 	team1MatchPoints: number = 0;
 	team2MatchPoints: number = 0;
 
+	// ── In-memory only (not persisted) ────────────────────────────────────────
 	disconnectTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+	// ─── Lifecycle ─────────────────────────────────────────────────────────────
 
 	constructor(ctx: DurableObjectState, env: any) {
 		super(ctx, env);
 		this.env = env;
 
+		// Hydrate from storage before any requests are handled.
 		this.ctx.blockConcurrencyWhile(async () => {
-			const stored = await this.ctx.storage.get<any>('gameState');
-			if (stored) {
-				this.roomCode = stored.roomCode || '';
-				this.isPrivate = stored.isPrivate || false;
-				this.ownerId = stored.ownerId || null;
-				this.pendingPlayers = stored.pendingPlayers || [];
-				this.players = stored.players || [];
-				this.deck = stored.deck || [];
-				this.hands = stored.hands || {};
-				this.trumpCard = stored.trumpCard || null;
-				this.gameStarted = stored.gameStarted || false;
-				this.currentTurnIndex = stored.currentTurnIndex || 0;
-				this.currentTrick = stored.currentTrick || [];
-				this.team1Points = stored.team1Points || 0;
-				this.team2Points = stored.team2Points || 0;
-				this.team1MatchPoints = stored.team1MatchPoints || 0;
-				this.team2MatchPoints = stored.team2MatchPoints || 0;
-			}
+			const stored = await this.ctx.storage.get<PersistedGameState>('gameState');
+			if (stored) this.hydrateFrom(stored);
 		});
 	}
 
-	private async saveState() {
-		await this.ctx.storage.put('gameState', {
+	// ─── Storage helpers ───────────────────────────────────────────────────────
+
+	/** Hydrate all fields from a persisted snapshot. */
+	private hydrateFrom(s: PersistedGameState): void {
+		this.roomCode = s.roomCode ?? '';
+		this.isPrivate = s.isPrivate ?? false;
+		this.ownerId = s.ownerId ?? null;
+		this.pendingPlayers = s.pendingPlayers ?? [];
+		this.players = s.players ?? [];
+		this.deck = s.deck ?? [];
+		this.hands = s.hands ?? {};
+		this.trumpCard = s.trumpCard ?? null;
+		this.gameStarted = s.gameStarted ?? false;
+		this.currentTurnIndex = s.currentTurnIndex ?? 0;
+		this.currentTrick = s.currentTrick ?? [];
+		this.dealerIndex = s.dealerIndex ?? 0;
+		this.firstPlayerIndex = s.firstPlayerIndex ?? 0;
+		this.team1Points = s.team1Points ?? 0;
+		this.team2Points = s.team2Points ?? 0;
+		this.team1MatchPoints = s.team1MatchPoints ?? 0;
+		this.team2MatchPoints = s.team2MatchPoints ?? 0;
+	}
+
+	/** Persist the current in-memory state. */
+	private async saveState(): Promise<void> {
+		await this.ctx.storage.put<PersistedGameState>('gameState', {
 			roomCode: this.roomCode,
 			isPrivate: this.isPrivate,
 			ownerId: this.ownerId,
@@ -80,6 +112,8 @@ export class GameRoom extends DurableObject {
 			gameStarted: this.gameStarted,
 			currentTurnIndex: this.currentTurnIndex,
 			currentTrick: this.currentTrick,
+			dealerIndex: this.dealerIndex,
+			firstPlayerIndex: this.firstPlayerIndex,
 			team1Points: this.team1Points,
 			team2Points: this.team2Points,
 			team1MatchPoints: this.team1MatchPoints,
@@ -87,14 +121,28 @@ export class GameRoom extends DurableObject {
 		});
 	}
 
-	private async reportToLobby() {
+	/**
+	 * Wipe all persisted and in-memory state.
+	 * Called when the last human leaves — the DO instance can then be reused
+	 * as a fresh room (e.g. the same Solo code re-played).
+	 */
+	private async nukeRoom(): Promise<void> {
+		await this.ctx.storage.deleteAll();
+		this.hydrateFrom({ roomCode: this.roomCode, ...BLANK_STATE });
+		this.ctx.waitUntil(this.reportToLobby());
+	}
+
+	// ─── Lobby sync ────────────────────────────────────────────────────────────
+
+	/** Push the current room status to the global LobbyManager DO. */
+	private async reportToLobby(): Promise<void> {
 		if (!this.roomCode || !this.env.LOBBY_MANAGER || this.roomCode.startsWith('SOLO_')) return;
 
-		try {
-			const lobbyId = this.env.LOBBY_MANAGER.idFromName('GLOBAL_LOBBY_INSTANCE');
-			const lobbyStub = this.env.LOBBY_MANAGER.get(lobbyId);
-			const humanCount = this.players.filter((p) => !p.isBot).length;
+		const lobbyId = this.env.LOBBY_MANAGER.idFromName('GLOBAL_LOBBY_INSTANCE');
+		const lobbyStub = this.env.LOBBY_MANAGER.get(lobbyId);
+		const humanCount = this.players.filter((p) => !p.isBot).length;
 
+		try {
 			if (humanCount === 0 && this.pendingPlayers.length === 0) {
 				await lobbyStub.fetch(`http://internal/lobby?code=${this.roomCode}`, { method: 'DELETE' });
 			} else {
@@ -109,224 +157,109 @@ export class GameRoom extends DurableObject {
 				});
 			}
 		} catch (e) {
-			console.error(e);
+			console.error('[GameRoom] reportToLobby failed:', e);
 		}
 	}
 
-	private notifyOwner() {
-		if (!this.ownerId) return;
-		const sockets = this.ctx.getWebSockets();
-		sockets.forEach((ws) => {
-			if (ws.deserializeAttachment().playerId === this.ownerId) {
-				ws.send(JSON.stringify({ action: 'APPROVAL_REQUEST', requests: this.pendingPlayers }));
-			}
-		});
-	}
+	// ─── WebSocket connection handling ─────────────────────────────────────────
 
 	async fetch(request: Request): Promise<Response> {
-		const upgradeHeader = request.headers.get('Upgrade');
-		if (!upgradeHeader || upgradeHeader !== 'websocket')
-			return new Response('Expected WS', { status: 426 });
+		if (request.headers.get('Upgrade') !== 'websocket') {
+			return new Response('Expected WebSocket upgrade', { status: 426 });
+		}
 
 		const url = new URL(request.url);
-		this.roomCode = url.pathname.split('/').pop() || 'UNKNOWN';
+		this.roomCode = url.pathname.split('/').pop() ?? 'UNKNOWN';
+
 		const isCreatingPrivate = url.searchParams.get('private') === 'true';
+		const playerId =
+			url.searchParams.get('playerId') ?? crypto.randomUUID().substring(0, 4).toUpperCase();
 
-		let playerId = url.searchParams.get('playerId');
-		if (!playerId) playerId = crypto.randomUUID().substring(0, 4).toUpperCase();
-
-		const webSocketPair = new WebSocketPair();
-		const [client, server] = Object.values(webSocketPair);
-
+		const { 0: client, 1: server } = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
 		server.serializeAttachment({ playerId });
 		this.ctx.acceptWebSocket(server);
 
-		const existingPlayer = this.players.find((p) => p.id === playerId);
+		// Cancel any pending disconnect timeout for a reconnecting player.
+		this.cancelDisconnectTimeout(playerId);
 
-		if (this.disconnectTimeouts.has(playerId)) {
-			clearTimeout(this.disconnectTimeouts.get(playerId));
-			this.disconnectTimeouts.delete(playerId);
-		}
-
-		if (existingPlayer) {
-			existingPlayer.isBot = false;
-			await this.saveState();
-			this.ctx.waitUntil(this.reportToLobby());
-		} else if (this.pendingPlayers.includes(playerId)) {
-			server.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
-			this.notifyOwner();
-		} else if (this.players.length === 0 && !this.gameStarted) {
-			this.isPrivate = isCreatingPrivate;
-			this.ownerId = playerId;
-			this.players.push({ id: playerId, isBot: false });
-			await this.saveState();
-			this.ctx.waitUntil(this.reportToLobby());
-		} else if (!this.gameStarted && this.players.length < 4) {
-			if (this.isPrivate && this.ownerId !== playerId) {
-				if (!this.pendingPlayers.includes(playerId)) {
-					this.pendingPlayers.push(playerId);
-					await this.saveState();
-				}
-				server.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
-				this.notifyOwner();
-			} else {
-				this.players.push({ id: playerId, isBot: false });
-				await this.saveState();
-				this.ctx.waitUntil(this.reportToLobby());
-			}
-		} else if (this.gameStarted) {
-			server.send(JSON.stringify({ action: 'ERROR', message: 'Game already in progress.' }));
-		}
+		this.handleJoin(server, playerId, isCreatingPrivate);
 
 		this.broadcastGameState();
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		try {
-			const { playerId } = ws.deserializeAttachment();
-			const textMessage = typeof message === 'string' ? message : new TextDecoder().decode(message);
+	/**
+	 * Route a newly connected socket through the correct join path:
+	 *  1. Reconnecting player (already in players[])
+	 *  2. Previously approved but still pending
+	 *  3. First player → becomes owner
+	 *  4. New player joining an open public room
+	 *  5. New player requesting to join a private room
+	 *  6. Late-join after game started → error
+	 */
+	private async handleJoin(
+		ws: WebSocket,
+		playerId: string,
+		isCreatingPrivate: boolean
+	): Promise<void> {
+		const existingPlayer = this.players.find((p) => p.id === playerId);
 
-			if (textMessage === 'LEAVE_ROOM') {
-				await this.handlePlayerDrop(playerId);
-				return;
-			}
+		if (existingPlayer) {
+			// Reconnection: restore as human and re-sync lobby.
+			existingPlayer.isBot = false;
+			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
+			return;
+		}
 
-			if (textMessage.startsWith('ACCEPT_PLAYER:')) {
-				if (playerId !== this.ownerId) return;
-				const targetId = textMessage.split(':')[1];
+		if (this.pendingPlayers.includes(playerId)) {
+			// Player is already queued for approval; just remind the owner.
+			ws.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
+			this.notifyOwner();
+			return;
+		}
 
-				this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
-				if (this.players.length < 4 && !this.gameStarted) {
-					this.players.push({ id: targetId, isBot: false });
-					await this.saveState();
-					this.ctx.waitUntil(this.reportToLobby());
-					this.broadcastGameState();
-					this.notifyOwner();
-				}
-				return;
-			}
+		if (this.players.length === 0 && !this.gameStarted) {
+			// First arrival → create the room.
+			this.isPrivate = isCreatingPrivate;
+			this.ownerId = playerId;
+			this.players.push({ id: playerId, isBot: false });
+			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
+			return;
+		}
 
-			if (textMessage.startsWith('DECLINE_PLAYER:')) {
-				if (playerId !== this.ownerId) return;
-				const targetId = textMessage.split(':')[1];
-
-				this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
-				const sockets = this.ctx.getWebSockets();
-				sockets.forEach((s) => {
-					if (s.deserializeAttachment().playerId === targetId) {
-						s.send(JSON.stringify({ action: 'REJECTED' }));
-					}
-				});
+		if (!this.gameStarted && this.players.length < 4) {
+			if (this.isPrivate) {
+				// Private room: queue the player and ask the owner.
+				this.pendingPlayers.push(playerId);
 				await this.saveState();
+				ws.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
 				this.notifyOwner();
-				return;
-			}
-
-			if (!this.players.find((p) => p.id === playerId) && !this.pendingPlayers.includes(playerId)) {
-				if (this.isPrivate && this.ownerId !== playerId) {
-					this.pendingPlayers.push(playerId);
-					ws.send(JSON.stringify({ action: 'WAITING_APPROVAL' }));
-					this.notifyOwner();
-				} else {
-					this.players.push({ id: playerId, isBot: false });
-					await this.saveState();
-					this.ctx.waitUntil(this.reportToLobby());
-				}
-			}
-
-			if (textMessage === 'START_GAME' && !this.gameStarted) {
-				if (this.isPrivate && playerId !== this.ownerId) {
-					ws.send(
-						JSON.stringify({ action: 'ERROR', message: 'Only the host can start the game.' })
-					);
-					return;
-				}
-
-				let botCounter = 1;
-				while (this.players.length < 4) {
-					this.players.push({ id: `BOT_${botCounter}`, isBot: true });
-					botCounter++;
-				}
-
-				const sockets = this.ctx.getWebSockets();
-				this.pendingPlayers.forEach((targetId) => {
-					sockets.forEach((s) => {
-						if (s.deserializeAttachment().playerId === targetId)
-							s.send(JSON.stringify({ action: 'REJECTED' }));
-					});
-				});
-				this.pendingPlayers = [];
-
-				this.deck = this.generateDeck();
-				this.shuffleDeck(this.deck);
-				this.trumpCard = this.deck[this.deck.length - 1];
-
-				for (let i = 0; i < 4; i++) {
-					this.hands[this.players[i].id] = this.deck.slice(i * 10, i * 10 + 10);
-				}
-
-				this.gameStarted = true;
-				this.currentTurnIndex = 0;
-				this.currentTrick = [];
-				this.team1Points = 0;
-				this.team2Points = 0;
-
+			} else {
+				// Public room: join immediately.
+				this.players.push({ id: playerId, isBot: false });
 				await this.saveState();
 				this.ctx.waitUntil(this.reportToLobby());
-				this.broadcastGameState();
-				this.processTurn();
-				return;
 			}
+			return;
+		}
 
-			if (textMessage.startsWith('PLAY_CARD')) {
-				if (!this.gameStarted) return;
-				if (this.currentTrick.length >= 4) return;
-				const activePlayer = this.players[this.currentTurnIndex];
-				if (!activePlayer || activePlayer.id !== playerId) return;
-
-				const cardIndex = parseInt(textMessage.split(':')[1], 10);
-				const myHand = this.hands[playerId];
-				if (!myHand) return;
-
-				const attemptedCard = myHand[cardIndex];
-				if (!attemptedCard) return;
-
-				const validMoves = this.getValidMoves(playerId);
-				const isValid = validMoves.some(
-					(c) => c.suit === attemptedCard.suit && c.rank === attemptedCard.rank
-				);
-
-				if (!isValid) {
-					const leadSuit = this.currentTrick[0].card.suit;
-					ws.send(
-						JSON.stringify({
-							action: 'ERROR',
-							message: `Renúncia! You must play a card of ${leadSuit}.`
-						})
-					);
-					return;
-				}
-
-				const playedCard = myHand.splice(cardIndex, 1)[0];
-				this.currentTrick.push({ playerId, card: playedCard });
-
-				await this.saveState();
-				this.advanceTurn();
-			}
-		} catch (err: any) {
-			ws.send(JSON.stringify({ action: 'ERROR', message: `SERVER CRASH: ${err.message}` }));
+		if (this.gameStarted) {
+			ws.send(JSON.stringify({ action: 'ERROR', message: 'Game already in progress.' }));
 		}
 	}
 
-	async webSocketClose(ws: WebSocket) {
+	async webSocketClose(ws: WebSocket): Promise<void> {
 		const { playerId } = ws.deserializeAttachment();
 
-		const activeSockets = this.ctx
+		// Don't drop the player if they still have another open socket.
+		const otherSockets = this.ctx
 			.getWebSockets()
 			.filter((s) => s !== ws && s.deserializeAttachment().playerId === playerId);
-		if (activeSockets.length > 0) return;
+		if (otherSockets.length > 0) return;
 
+		// Grace period: give the player 5 s to reconnect before dropping them.
 		const timeout = setTimeout(async () => {
 			this.disconnectTimeouts.delete(playerId);
 			await this.handlePlayerDrop(playerId);
@@ -335,29 +268,367 @@ export class GameRoom extends DurableObject {
 		this.disconnectTimeouts.set(playerId, timeout);
 	}
 
-	private async handlePlayerDrop(playerId: string) {
+	// ─── Incoming message dispatch ─────────────────────────────────────────────
+
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+		try {
+			const { playerId } = ws.deserializeAttachment();
+			const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+
+			if (text === 'LEAVE_ROOM') return this.handleLeave(playerId);
+			if (text === 'START_GAME') return this.handleStartGame(ws, playerId);
+			if (text.startsWith('PLAY_CARD:')) return this.handlePlayCard(ws, playerId, text);
+			if (text.startsWith('ACCEPT_PLAYER:')) return this.handleAcceptPlayer(playerId, text);
+			if (text.startsWith('DECLINE_PLAYER:')) return this.handleDeclinePlayer(playerId, text);
+		} catch (err: any) {
+			ws.send(JSON.stringify({ action: 'ERROR', message: `SERVER CRASH: ${err.message}` }));
+		}
+	}
+
+	// ─── Message handlers ──────────────────────────────────────────────────────
+
+	private async handleLeave(playerId: string): Promise<void> {
+		await this.handlePlayerDrop(playerId);
+	}
+
+	private async handleAcceptPlayer(ownerId: string, text: string): Promise<void> {
+		if (ownerId !== this.ownerId) return;
+		const targetId = text.split(':')[1];
+
+		this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
+
+		if (this.players.length < 4 && !this.gameStarted) {
+			this.players.push({ id: targetId, isBot: false });
+			await this.saveState();
+			this.ctx.waitUntil(this.reportToLobby());
+			this.broadcastGameState();
+		}
+
+		this.notifyOwner();
+	}
+
+	private async handleDeclinePlayer(ownerId: string, text: string): Promise<void> {
+		if (ownerId !== this.ownerId) return;
+		const targetId = text.split(':')[1];
+
+		this.pendingPlayers = this.pendingPlayers.filter((id) => id !== targetId);
+		this.sendToPlayer(targetId, { action: 'REJECTED' });
+		await this.saveState();
+		this.notifyOwner();
+	}
+
+	private async handleStartGame(ws: WebSocket, playerId: string): Promise<void> {
+		if (this.gameStarted) {
+			// Already started — just sync the requesting client.
+			this.broadcastGameState();
+			return;
+		}
+
+		if (this.isPrivate && playerId !== this.ownerId) {
+			ws.send(JSON.stringify({ action: 'ERROR', message: 'Only the host can start the game.' }));
+			return;
+		}
+
+		this.fillWithBots();
+		this.rejectPendingPlayers();
+		this.dealNewRound();
+
+		await this.saveState();
+		this.ctx.waitUntil(this.reportToLobby());
+		this.broadcastGameState();
+
+		// Let the deal animation finish before the first bot acts.
+		setTimeout(() => this.processTurn(), 3200);
+	}
+
+	private async handlePlayCard(ws: WebSocket, playerId: string, text: string): Promise<void> {
+		if (!this.gameStarted) return;
+		if (this.currentTrick.length >= 4) return;
+
+		const activePlayer = this.players[this.currentTurnIndex];
+		if (!activePlayer || activePlayer.id !== playerId) return;
+
+		const cardIndex = parseInt(text.split(':')[1], 10);
+		const myHand = this.hands[playerId];
+		if (!myHand) return;
+
+		const attemptedCard = myHand[cardIndex];
+		if (!attemptedCard) return;
+
+		const validMoves = this.getValidMoves(playerId);
+		const isValid = validMoves.some(
+			(c) => c.suit === attemptedCard.suit && c.rank === attemptedCard.rank
+		);
+
+		if (!isValid) {
+			const leadSuit = this.currentTrick[0].card.suit;
+			ws.send(
+				JSON.stringify({
+					action: 'ERROR',
+					message: `Renúncia! You must play a card of ${leadSuit}.`
+				})
+			);
+			return;
+		}
+
+		const playedCard = myHand.splice(cardIndex, 1)[0];
+		this.currentTrick.push({ playerId, card: playedCard });
+
+		await this.saveState();
+		this.advanceTurn();
+	}
+
+	// ─── Game flow ─────────────────────────────────────────────────────────────
+
+	/**
+	 * Called after each card is played.
+	 * - Advances the turn index normally (< 4 cards played).
+	 * - When a trick is complete (4 cards), scores it and either starts the
+	 *   next trick or ends the round.
+	 */
+	private async advanceTurn(): Promise<void> {
+		const trickComplete = this.currentTrick.length === 4;
+
+		if (!trickComplete) {
+			this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
+			await this.saveState();
+			this.broadcastGameState();
+			this.processTurn();
+			return;
+		}
+
+		// Broadcast the completed trick before the 1-second pause.
+		this.broadcastGameState();
+
+		setTimeout(async () => {
+			await this.resolveTrick();
+		}, 1000);
+	}
+
+	/** Score the completed trick and either start the next trick or end the round. */
+	private async resolveTrick(): Promise<void> {
+		const winnerId = evaluateTrickWinner(this.currentTrick, this.trumpCard!.suit);
+		const winnerIndex = this.players.findIndex((p) => p.id === winnerId);
+		const trickPoints = this.currentTrick.reduce((sum, play) => sum + play.card.value, 0);
+
+		// Team 1 = indices 0,2 · Team 2 = indices 1,3
+		if (winnerIndex % 2 === 0) this.team1Points += trickPoints;
+		else this.team2Points += trickPoints;
+
+		this.currentTurnIndex = winnerIndex;
+		this.currentTrick = [];
+
+		const roundOver = Object.values(this.hands).every((h) => h.length === 0);
+
+		if (roundOver) {
+			await this.endRound();
+			return;
+		}
+
+		await this.saveState();
+		this.broadcastGameState();
+		this.processTurn();
+	}
+
+	/** Tally scores, broadcast GAME_OVER, and advance the dealer for next round. */
+	private async endRound(): Promise<void> {
+		this.gameStarted = false;
+
+		const { team1RoundPoints, team2RoundPoints, summary } = calculateRoundPoints(
+			this.team1Points,
+			this.team2Points
+		);
+		this.team1MatchPoints += team1RoundPoints;
+		this.team2MatchPoints += team2RoundPoints;
+
+		let matchResult = summary;
+		let matchOver = false;
+
+		if (isMatchOver(this.team1MatchPoints, this.team2MatchPoints)) {
+			const winner = this.team1MatchPoints >= MATCH_POINTS_TO_WIN ? 'Team 1' : 'Team 2';
+			matchResult += `\n\n🏆 ${winner} WINS THE ENTIRE MATCH! 🏆`;
+			this.team1MatchPoints = 0;
+			this.team2MatchPoints = 0;
+			matchOver = true;
+		}
+
+		this.dealerIndex = (this.dealerIndex + 1) % 4;
+
+		await this.saveState();
+		this.ctx.waitUntil(this.reportToLobby());
+		this.broadcastGameState();
+		this.broadcast({
+			action: 'GAME_OVER',
+			t1: this.team1Points,
+			t2: this.team2Points,
+			matchResult,
+			isMatchOver: matchOver
+		});
+	}
+
+	/** Bot AI: play a random valid card after a short delay. */
+	private processTurn(): void {
+		const activePlayer = this.players[this.currentTurnIndex];
+		if (!activePlayer?.isBot) return;
+
+		const botHand = this.hands[activePlayer.id];
+		if (!botHand?.length) return;
+
+		setTimeout(async () => {
+			const validMoves = this.getValidMoves(activePlayer.id);
+			const chosen = validMoves[Math.floor(Math.random() * validMoves.length)];
+			const chosenIndex = botHand.findIndex(
+				(c) => c.suit === chosen.suit && c.rank === chosen.rank
+			);
+			const playedCard = botHand.splice(chosenIndex, 1)[0];
+			this.currentTrick.push({ playerId: activePlayer.id, card: playedCard });
+			await this.saveState();
+			this.advanceTurn();
+		}, 1000);
+	}
+
+	/**
+	 * Enforce the "follow-suit" (Renúncia) rule.
+	 * Returns the cards the player is allowed to play.
+	 */
+	private getValidMoves(playerId: string): Card[] {
+		const hand = this.hands[playerId];
+		if (!hand || this.currentTrick.length === 0) return hand ?? [];
+		const leadSuit = this.currentTrick[0].card.suit;
+		const suitCards = hand.filter((c) => c.suit === leadSuit);
+		return suitCards.length > 0 ? suitCards : hand;
+	}
+
+	// ─── Round setup helpers ───────────────────────────────────────────────────
+
+	/** Add bots until the table has 4 players. */
+	private fillWithBots(): void {
+		const existingBotNums = this.players
+			.map((p) => p.id.match(/^BOT_(\d+)$/))
+			.filter(Boolean)
+			.map((m) => parseInt(m![1], 10));
+		let botCounter = existingBotNums.length > 0 ? Math.max(...existingBotNums) + 1 : 1;
+		while (this.players.length < 4) {
+			// Skip any counter values that are already taken.
+			while (this.players.some((p) => p.id === `BOT_${botCounter}`)) botCounter++;
+			this.players.push({ id: `BOT_${botCounter}`, isBot: true });
+			botCounter++;
+		}
+	}
+
+	/** Send REJECTED to every pending player and clear the queue. */
+	private rejectPendingPlayers(): void {
+		this.pendingPlayers.forEach((targetId) => this.sendToPlayer(targetId, { action: 'REJECTED' }));
+		this.pendingPlayers = [];
+	}
+
+	/**
+	 * Shuffle a fresh deck, deal 10 cards to each player, handle the trump-card
+	 * swap (the player holding the trump card gives it to the dealer and takes
+	 * the dealer's top card), then set up turn order.
+	 */
+	private dealNewRound(): void {
+		this.deck = generateDeck();
+		shuffleDeck(this.deck);
+
+		this.trumpCard = this.deck[39];
+		const playerIds = this.players.map((p) => p.id);
+		this.hands = dealHands(this.deck, playerIds);
+
+		this.performTrumpSwap();
+
+		// Only randomise the first dealer; subsequent rounds rotate.
+		const isFirstRound =
+			this.team1Points === 0 &&
+			this.team2Points === 0 &&
+			this.team1MatchPoints === 0 &&
+			this.team2MatchPoints === 0;
+		if (isFirstRound) {
+			this.dealerIndex = Math.floor(Math.random() * 4);
+		}
+
+		this.gameStarted = true;
+		this.firstPlayerIndex = (this.dealerIndex + 1) % 4;
+		this.currentTurnIndex = this.firstPlayerIndex;
+		this.currentTrick = [];
+		this.team1Points = 0;
+		this.team2Points = 0;
+	}
+
+	/**
+	 * Sueca trump-swap rule: whoever holds the trump card in their initial hand
+	 * gives it to the dealer. The dealer gives back the top card of their hand
+	 * (unless the dealer already holds the trump card, in which case no swap).
+	 */
+	private performTrumpSwap(): void {
+		const dealerId = this.players[this.dealerIndex].id;
+
+		for (let i = 0; i < 4; i++) {
+			const playerHand = this.hands[this.players[i].id];
+			const trumpIndex = playerHand.findIndex(
+				(c) => c.suit === this.trumpCard!.suit && c.rank === this.trumpCard!.rank
+			);
+			if (trumpIndex === -1) continue;
+
+			// Found the trump holder.
+			playerHand.splice(trumpIndex, 1);
+			this.hands[dealerId].push(this.trumpCard!);
+
+			if (i !== this.dealerIndex) {
+				// Give the dealer's former top card back to the trump holder.
+				const swappedCard = this.hands[dealerId].shift()!;
+				playerHand.push(swappedCard);
+			}
+			break;
+		}
+	}
+
+	// ─── Disconnect / player drop ──────────────────────────────────────────────
+
+	private cancelDisconnectTimeout(playerId: string): void {
+		const existing = this.disconnectTimeouts.get(playerId);
+		if (existing) {
+			clearTimeout(existing);
+			this.disconnectTimeouts.delete(playerId);
+		}
+	}
+
+	/**
+	 * Handle a player leaving (either graceful LEAVE_ROOM or disconnect timeout).
+	 *
+	 * - Remove from pending queue.
+	 * - If game is running, convert to a bot; otherwise remove entirely.
+	 * - If the owner left, promote the next human.
+	 * - If no humans remain, nuke the room.
+	 */
+	private async handlePlayerDrop(playerId: string): Promise<void> {
 		this.pendingPlayers = this.pendingPlayers.filter((id) => id !== playerId);
 		this.notifyOwner();
 
 		const playerIndex = this.players.findIndex((p) => p.id === playerId);
+
 		if (playerIndex !== -1) {
 			if (this.gameStarted) {
 				this.players[playerIndex].isBot = true;
-				const humanCount = this.players.filter((p) => !p.isBot).length;
-				if (humanCount === 0) {
-					this.gameStarted = false;
-					this.players = [];
-				} else if (this.currentTurnIndex === playerIndex) {
+				const hasHumansLeft = this.players.some((p) => !p.isBot);
+				if (hasHumansLeft && this.currentTurnIndex === playerIndex) {
 					this.processTurn();
 				}
 			} else {
 				this.players.splice(playerIndex, 1);
 			}
 
-			if (this.ownerId === playerId && this.players.length > 0) {
+			if (this.ownerId === playerId) {
 				const nextHuman = this.players.find((p) => !p.isBot);
-				this.ownerId = nextHuman ? nextHuman.id : null;
+				this.ownerId = nextHuman?.id ?? null;
 			}
+		}
+
+		const hasHumans = this.players.some((p) => !p.isBot);
+		if (!hasHumans) {
+			// No humans left — wipe everything so the room can be reused fresh.
+			await this.nukeRoom();
+			return;
 		}
 
 		await this.saveState();
@@ -365,127 +636,19 @@ export class GameRoom extends DurableObject {
 		this.ctx.waitUntil(this.reportToLobby());
 	}
 
-	private async advanceTurn() {
-		if (this.currentTrick.length === 4) {
-			this.broadcastGameState();
-			setTimeout(async () => {
-				const winnerId = this.evaluateTrickWinner();
-				const winnerIndex = this.players.findIndex((p) => p.id === winnerId);
-				const trickPoints = this.currentTrick.reduce((sum, play) => sum + play.card.value, 0);
+	// ─── Broadcast helpers ─────────────────────────────────────────────────────
 
-				if (winnerIndex % 2 === 0) this.team1Points += trickPoints;
-				else this.team2Points += trickPoints;
-
-				this.currentTurnIndex = winnerIndex;
-				this.currentTrick = [];
-
-				if (this.hands[this.players[0].id].length === 0) {
-					this.gameStarted = false;
-					let matchResult = '';
-
-					if (this.team1Points > 60) {
-						const pts = this.team1Points === 120 ? 4 : this.team1Points > 90 ? 2 : 1;
-						this.team1MatchPoints += pts;
-						matchResult = `Team 1 wins ${pts} match point(s)!`;
-					} else if (this.team2Points > 60) {
-						const pts = this.team2Points === 120 ? 4 : this.team2Points > 90 ? 2 : 1;
-						this.team2MatchPoints += pts;
-						matchResult = `Team 2 wins ${pts} match point(s)!`;
-					} else {
-						matchResult = 'Draw! 60 - 60.';
-					}
-
-					if (this.team1MatchPoints >= 4) {
-						matchResult += '\n\n🏆 TEAM 1 WINS THE ENTIRE MATCH! 🏆';
-						this.team1MatchPoints = 0;
-						this.team2MatchPoints = 0;
-					} else if (this.team2MatchPoints >= 4) {
-						matchResult += '\n\n🏆 TEAM 2 WINS THE ENTIRE MATCH! 🏆';
-						this.team1MatchPoints = 0;
-						this.team2MatchPoints = 0;
-					}
-
-					await this.saveState();
-					this.ctx.waitUntil(this.reportToLobby());
-					this.broadcast({
-						action: 'GAME_OVER',
-						t1: this.team1Points,
-						t2: this.team2Points,
-						matchResult
-					});
-					return;
-				}
-				await this.saveState();
-				this.broadcastGameState();
-				this.processTurn();
-			}, 2000);
-			return;
+	/**
+	 * Send each connected socket a personalised state snapshot.
+	 * Each player only sees their own hand; other hands are opaque size counts.
+	 */
+	private broadcastGameState(): void {
+		const handSizes: Record<string, number> = {};
+		for (const pid in this.hands) {
+			handSizes[pid] = this.hands[pid].length;
 		}
-		this.currentTurnIndex = (this.currentTurnIndex + 1) % 4;
-		await this.saveState();
-		this.broadcastGameState();
-		this.processTurn();
-	}
 
-	private evaluateTrickWinner(): string {
-		const leadSuit = this.currentTrick[0].card.suit;
-		const trumpSuit = this.trumpCard!.suit;
-		const rankPower: Record<Rank, number> = {
-			A: 10,
-			'7': 9,
-			K: 8,
-			J: 7,
-			Q: 6,
-			'6': 5,
-			'5': 4,
-			'4': 3,
-			'3': 2,
-			'2': 1
-		};
-		let winningPlay = this.currentTrick[0];
-		let maxPower = -1;
-		for (const play of this.currentTrick) {
-			let power = 0;
-			if (play.card.suit === trumpSuit) power = 1000 + rankPower[play.card.rank];
-			else if (play.card.suit === leadSuit) power = 100 + rankPower[play.card.rank];
-			if (power > maxPower) {
-				maxPower = power;
-				winningPlay = play;
-			}
-		}
-		return winningPlay.playerId;
-	}
-
-	private processTurn() {
-		const activePlayer = this.players[this.currentTurnIndex];
-		if (activePlayer && activePlayer.isBot) {
-			const botHand = this.hands[activePlayer.id];
-			if (!botHand || botHand.length === 0) return;
-			setTimeout(async () => {
-				const validMoves = this.getValidMoves(activePlayer.id);
-				const randomValidCard = validMoves[Math.floor(Math.random() * validMoves.length)];
-				const cardIndexInHand = botHand.findIndex(
-					(c) => c.suit === randomValidCard.suit && c.rank === randomValidCard.rank
-				);
-				const playedCard = botHand.splice(cardIndexInHand, 1)[0];
-				this.currentTrick.push({ playerId: activePlayer.id, card: playedCard });
-				await this.saveState();
-				this.advanceTurn();
-			}, 1000);
-		}
-	}
-
-	private getValidMoves(playerId: string): Card[] {
-		const myHand = this.hands[playerId];
-		if (!myHand || this.currentTrick.length === 0) return myHand || [];
-		const leadSuit = this.currentTrick[0].card.suit;
-		const cardsOfLeadSuit = myHand.filter((card) => card.suit === leadSuit);
-		return cardsOfLeadSuit.length > 0 ? cardsOfLeadSuit : myHand;
-	}
-
-	private broadcastGameState() {
-		const allSockets = this.ctx.getWebSockets();
-		allSockets.forEach((socket) => {
+		for (const socket of this.ctx.getWebSockets()) {
 			const { playerId } = socket.deserializeAttachment();
 			socket.send(
 				JSON.stringify({
@@ -494,8 +657,10 @@ export class GameRoom extends DurableObject {
 					ownerId: this.ownerId,
 					players: this.players,
 					activePlayerId: this.players[this.currentTurnIndex]?.id,
+					dealerId: this.players[this.dealerIndex]?.id,
 					table: this.currentTrick,
-					myHand: this.hands[playerId] || [],
+					myHand: this.hands[playerId] ?? [],
+					handSizes,
 					myPlayerId: playerId,
 					team1Points: this.team1Points,
 					team2Points: this.team2Points,
@@ -504,38 +669,31 @@ export class GameRoom extends DurableObject {
 					trumpCard: this.trumpCard
 				})
 			);
-		});
-	}
-
-	private broadcast(data: any) {
-		const allSockets = this.ctx.getWebSockets();
-		allSockets.forEach((s) => s.send(JSON.stringify(data)));
-	}
-
-	private generateDeck(): Card[] {
-		const suits: Suit[] = ['copas', 'espadas', 'ouros', 'paus'];
-		const ranks: { rank: Rank; value: number }[] = [
-			{ rank: 'A', value: 11 },
-			{ rank: '7', value: 10 },
-			{ rank: 'K', value: 4 },
-			{ rank: 'J', value: 3 },
-			{ rank: 'Q', value: 2 },
-			{ rank: '6', value: 0 },
-			{ rank: '5', value: 0 },
-			{ rank: '4', value: 0 },
-			{ rank: '3', value: 0 },
-			{ rank: '2', value: 0 }
-		];
-		const newDeck: Card[] = [];
-		for (const suit of suits)
-			for (const { rank, value } of ranks) newDeck.push({ suit, rank, value });
-		return newDeck;
-	}
-
-	private shuffleDeck(deck: Card[]) {
-		for (let i = deck.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[deck[i], deck[j]] = [deck[j], deck[i]];
 		}
+	}
+
+	/** Broadcast the same payload to every connected socket. */
+	private broadcast(data: unknown): void {
+		for (const socket of this.ctx.getWebSockets()) {
+			socket.send(JSON.stringify(data));
+		}
+	}
+
+	/** Send a message only to the sockets belonging to a specific player. */
+	private sendToPlayer(targetPlayerId: string, data: unknown): void {
+		for (const socket of this.ctx.getWebSockets()) {
+			if (socket.deserializeAttachment().playerId === targetPlayerId) {
+				socket.send(JSON.stringify(data));
+			}
+		}
+	}
+
+	/** Notify the room owner of the current pending-player queue. */
+	private notifyOwner(): void {
+		if (!this.ownerId) return;
+		this.sendToPlayer(this.ownerId, {
+			action: 'APPROVAL_REQUEST',
+			requests: this.pendingPlayers
+		});
 	}
 }
