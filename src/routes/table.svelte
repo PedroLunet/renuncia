@@ -483,27 +483,25 @@
 	<div class="flex h-32 w-full flex-col items-center justify-start pt-8">
 		{#if playerNorth}
 			<div class="flex flex-col items-center gap-4 transition-all">
-				{#if handNorth.length > 0}
-					<div class="flex -space-x-6">
-						{#each handNorth as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
-							{@const offset = index - (handNorth.length - 1) / 2}
-							{@const rot = offset * -2}
-							{@const yOffset = -Math.pow(offset, 2) * 0.5}
-							<div
-								use:dealAnimation={{ index: cardIndex, playerOffset: 2, isStart: isStartOfRound }}
-								id="hand-{playerNorth.id}-card-{cardIndex}"
-							>
-								<img
-									src="/cards/back.svg"
-									alt="Card Back"
-									class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
-									style="transform: translateY({yOffset}px) rotate({rot}deg); transform-origin: top center;"
-									draggable="false"
-								/>
-							</div>
-						{/each}
-					</div>
-				{/if}
+				<div class="flex h-12 items-end justify-center -space-x-6">
+					{#each handNorth as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
+						{@const offset = index - (handNorth.length - 1) / 2}
+						{@const rot = offset * -2}
+						{@const yOffset = -Math.pow(offset, 2) * 0.5}
+						<div
+							use:dealAnimation={{ index: cardIndex, playerOffset: 2, isStart: isStartOfRound }}
+							id="hand-{playerNorth.id}-card-{cardIndex}"
+						>
+							<img
+								src="/cards/back.svg"
+								alt="Card Back"
+								class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
+								style="transform: translateY({yOffset}px) rotate({rot}deg); transform-origin: top center;"
+								draggable="false"
+							/>
+						</div>
+					{/each}
+				</div>
 				<div
 					class="text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {activePlayerId ===
 					playerNorth.id
@@ -530,27 +528,25 @@
 					{playerWest.id}
 					{dealerId === playerWest.id ? '🃏' : ''}
 				</div>
-				{#if handWest.length > 0}
-					<div class="flex flex-col -space-y-8">
-						{#each handWest as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
-							{@const offset = index - (handWest.length - 1) / 2}
-							{@const rot = 90 + offset * 2}
-							{@const xOffset = -Math.pow(offset, 2) * 0.5}
-							<div
-								use:dealAnimation={{ index: cardIndex, playerOffset: 3, isStart: isStartOfRound }}
-								id="hand-{playerWest.id}-card-{cardIndex}"
-							>
-								<img
-									src="/cards/back.svg"
-									alt="Card Back"
-									class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
-									style="transform: translateX({xOffset}px) rotate({rot}deg); transform-origin: center center;"
-									draggable="false"
-								/>
-							</div>
-						{/each}
-					</div>
-				{/if}
+				<div class="flex w-12 flex-col -space-y-8">
+					{#each handWest as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
+						{@const offset = index - (handWest.length - 1) / 2}
+						{@const rot = 90 + offset * 2}
+						{@const xOffset = -Math.pow(offset, 2) * 0.5}
+						<div
+							use:dealAnimation={{ index: cardIndex, playerOffset: 3, isStart: isStartOfRound }}
+							id="hand-{playerWest.id}-card-{cardIndex}"
+						>
+							<img
+								src="/cards/back.svg"
+								alt="Card Back"
+								class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
+								style="transform: translateX({xOffset}px) rotate({rot}deg); transform-origin: center center;"
+								draggable="false"
+							/>
+						</div>
+					{/each}
+				</div>
 			</div>
 		{/if}
 
@@ -727,27 +723,25 @@
 
 		{#if playerEast}
 			<div class="flex flex-row items-center gap-6 transition-all">
-				{#if handEast.length > 0}
-					<div class="flex flex-col -space-y-8">
-						{#each handEast as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
-							{@const offset = index - (handEast.length - 1) / 2}
-							{@const rot = -90 + offset * -2}
-							{@const xOffset = Math.pow(offset, 2) * 0.5}
-							<div
-								use:dealAnimation={{ index: cardIndex, playerOffset: 1, isStart: isStartOfRound }}
-								id="hand-{playerEast.id}-card-{cardIndex}"
-							>
-								<img
-									src="/cards/back.svg"
-									alt="Card Back"
-									class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
-									style="transform: translateX({xOffset}px) rotate({rot}deg); transform-origin: center center;"
-									draggable="false"
-								/>
-							</div>
-						{/each}
-					</div>
-				{/if}
+				<div class="flex w-12 flex-col -space-y-8">
+					{#each handEast as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
+						{@const offset = index - (handEast.length - 1) / 2}
+						{@const rot = -90 + offset * -2}
+						{@const xOffset = Math.pow(offset, 2) * 0.5}
+						<div
+							use:dealAnimation={{ index: cardIndex, playerOffset: 1, isStart: isStartOfRound }}
+							id="hand-{playerEast.id}-card-{cardIndex}"
+						>
+							<img
+								src="/cards/back.svg"
+								alt="Card Back"
+								class="h-auto w-12 drop-shadow-lg transition-transform duration-500 ease-out"
+								style="transform: translateX({xOffset}px) rotate({rot}deg); transform-origin: center center;"
+								draggable="false"
+							/>
+						</div>
+					{/each}
+				</div>
 				<div
 					class="text-[10px] font-light tracking-[0.2em] uppercase transition-all duration-500 {activePlayerId ===
 					playerEast.id
