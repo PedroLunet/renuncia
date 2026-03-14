@@ -400,7 +400,13 @@
 	}
 
 	function ghostTrunfoAnim(node: HTMLElement, isStart: boolean) {
+		let tl: gsap.core.Timeline | null = null;
+
 		function applyAnim(start: boolean) {
+			if (tl) {
+				tl.kill();
+				tl = null;
+			}
 			if (!start) {
 				gsap.set(node, { opacity: 0, display: 'none' });
 				return;
@@ -409,7 +415,7 @@
 			const dIndex = playersList.findIndex((p: Player) => p.id === dealerId);
 			const dOffset = dIndex !== -1 ? (dIndex - myIndex + 4) % 4 : 0;
 
-			const tl = gsap.timeline();
+			tl = gsap.timeline();
 			tl.to(node, { x: 80, duration: 0.4, ease: 'power2.out' });
 			tl.to(node, { duration: 2.2 });
 
@@ -426,7 +432,7 @@
 				applyAnim(newStart);
 			},
 			destroy() {
-				tl.kill();
+				if (tl) tl.kill();
 			}
 		};
 	}
