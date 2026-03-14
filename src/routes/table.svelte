@@ -40,7 +40,8 @@
 		socket,
 		approvalRequests,
 		quitRoom,
-		playCard
+		playCard,
+		roundEnded
 	} = $props<{
 		myHand: Card[];
 		table: PlayedCard[];
@@ -62,6 +63,7 @@
 		approvalRequests: string[];
 		quitRoom: () => void;
 		playCard: (index: number) => void;
+		roundEnded: boolean;
 	}>();
 
 	let isMyTurn = $derived(
@@ -234,12 +236,22 @@
 				lastPlayedCardRect = null;
 			} else if (!isMe) {
 				const count = handSizes[playerId] || 0;
+				initialRotation = playerId === playerEast?.id ? -90 : playerId === playerWest?.id ? 90 : 0;
 				if (count > 0) {
 					const randomIndex = count > 2 ? Math.floor(Math.random() * (count - 2)) + 1 : 0;
 					const sourceEl = document.getElementById(`hand-${playerId}-card-${randomIndex}`);
-					if (sourceEl) sourceRect = sourceEl.getBoundingClientRect();
+					if (sourceEl) {
+						sourceRect = sourceEl.getBoundingClientRect();
+					} else {
+						// Last card: individual element is gone, fall back to the hand container
+						const containerEl = document.getElementById(`hand-${playerId}-container`);
+						if (containerEl) sourceRect = containerEl.getBoundingClientRect();
+					}
+				} else {
+					// Hand already empty — still use container position for origin
+					const containerEl = document.getElementById(`hand-${playerId}-container`);
+					if (containerEl) sourceRect = containerEl.getBoundingClientRect();
 				}
-				initialRotation = playerId === playerEast?.id ? -90 : playerId === playerWest?.id ? 90 : 0;
 			}
 
 			if (sourceRect) {
@@ -523,7 +535,10 @@
 	<div class="flex h-32 w-full flex-col items-center justify-start pt-8">
 		{#if playerNorth}
 			<div class="flex flex-col items-center gap-4 transition-all">
-				<div class="flex h-12 items-end justify-center -space-x-6">
+				<div
+					id="hand-{playerNorth.id}-container"
+					class="flex h-12 items-end justify-center -space-x-6"
+				>
 					{#each handNorth as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
 						{@const offset = index - (handNorth.length - 1) / 2}
 						{@const rot = offset * -2}
@@ -568,7 +583,7 @@
 					{playerWest.id}
 					{dealerId === playerWest.id ? '🃏' : ''}
 				</div>
-				<div class="flex w-12 flex-col -space-y-8">
+				<div id="hand-{playerWest.id}-container" class="flex w-12 flex-col -space-y-8">
 					{#each handWest as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
 						{@const offset = index - (handWest.length - 1) / 2}
 						{@const rot = 90 + offset * 2}
@@ -591,7 +606,7 @@
 		{/if}
 
 		<div class="relative h-64 w-64">
-			{#if !gameStarted}
+			{#if !gameStarted && !roundEnded}
 				<div class="absolute inset-0 z-50 flex items-center justify-center">
 					<div
 						class="w-full min-w-[320px] rounded-xl border border-neutral-800 bg-[#0c0c0c]/95 p-6 text-center shadow-2xl backdrop-blur-md"
@@ -763,7 +778,7 @@
 
 		{#if playerEast}
 			<div class="flex flex-row items-center gap-6 transition-all">
-				<div class="flex w-12 flex-col -space-y-8">
+				<div id="hand-{playerEast.id}-container" class="flex w-12 flex-col -space-y-8">
 					{#each handEast as cardIndex, index (cardIndex + '-' + (trumpCard?.suit || ''))}
 						{@const offset = index - (handEast.length - 1) / 2}
 						{@const rot = -90 + offset * -2}

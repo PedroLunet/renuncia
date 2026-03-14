@@ -47,6 +47,7 @@
 
 	let showGameOverModal = $state(false);
 	let gameOverData: any = $state(null);
+	let roundEnded = $state(false);
 
 	let roomInput = $state('');
 	let currentRoomCode = $state('');
@@ -118,6 +119,7 @@
 				if (gameStarted) {
 					showGameOverModal = false;
 					gameOverData = null;
+					roundEnded = false;
 				}
 
 				ownerId = data.ownerId;
@@ -144,8 +146,11 @@
 				addToast(data.message);
 			} else if (data.action === 'GAME_OVER') {
 				gameOverData = data;
-				showGameOverModal = true;
-				gameStarted = false;
+				roundEnded = true;
+				// Delay modal until the trick-vanish animation finishes (~1500ms) plus a small buffer
+				setTimeout(() => {
+					showGameOverModal = true;
+				}, 1800);
 			}
 		};
 
@@ -248,6 +253,7 @@
 			{approvalRequests}
 			{quitRoom}
 			{playCard}
+			{roundEnded}
 		/>
 	{/if}
 
