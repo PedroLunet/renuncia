@@ -418,7 +418,7 @@ export class GameRoom extends DurableObject {
 		this.currentTurnIndex = winnerIndex;
 		this.currentTrick = [];
 
-		const roundOver = !this.hands[this.players[0]?.id]?.length;
+		const roundOver = Object.values(this.hands).every((h) => h.length === 0);
 
 		if (roundOver) {
 			await this.endRound();
@@ -503,8 +503,14 @@ export class GameRoom extends DurableObject {
 
 	/** Add bots until the table has 4 players. */
 	private fillWithBots(): void {
-		let botCounter = 1;
+		const existingBotNums = this.players
+			.map((p) => p.id.match(/^BOT_(\d+)$/))
+			.filter(Boolean)
+			.map((m) => parseInt(m![1], 10));
+		let botCounter = existingBotNums.length > 0 ? Math.max(...existingBotNums) + 1 : 1;
 		while (this.players.length < 4) {
+			// Skip any counter values that are already taken.
+			while (this.players.some((p) => p.id === `BOT_${botCounter}`)) botCounter++;
 			this.players.push({ id: `BOT_${botCounter}`, isBot: true });
 			botCounter++;
 		}

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
-	import { fly, fade } from 'svelte/transition';
+	import { fade } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { cubicOut } from 'svelte/easing';
 	import gsap from 'gsap';
@@ -126,6 +125,9 @@
 			)
 	);
 
+	// myIndex % 2 === 0 → local player is in global team 1 (indices 0 & 2)
+	let myTeamNumber = $derived(myIndex % 2 === 0 ? 1 : 2);
+
 	let isStartOfRound = $derived(
 		myHand.length === 10 && table.length === 0 && team1Points === 0 && team2Points === 0
 	);
@@ -150,11 +152,6 @@
 		const el = document.getElementById(`my-card-${card.suit}-${card.rank}`);
 		if (el) lastPlayedCardRect = el.getBoundingClientRect();
 		playCard(index);
-	}
-
-	function getPlayedCard(playerId: string | undefined): Card | null {
-		if (!playerId) return null;
-		return table.find((play: PlayedCard) => play.playerId === playerId)?.card || null;
 	}
 
 	function trickVanish(node: HTMLElement, { initialRot = 0 }) {
@@ -472,7 +469,9 @@
 >
 	<div class="absolute top-8 left-8 z-20 flex gap-12">
 		<div class="flex flex-col">
-			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Team 1 (N/S)</span>
+			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase"
+				>{myTeamNumber === 1 ? 'Your Team' : 'Opponents'}</span
+			>
 			<div class="flex items-baseline gap-2">
 				<span class="text-3xl font-light text-text drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
 					>{team1Points}</span
@@ -481,7 +480,9 @@
 			</div>
 		</div>
 		<div class="flex flex-col">
-			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase">Team 2 (E/W)</span>
+			<span class="text-[10px] tracking-[0.2em] text-neutral-500 uppercase"
+				>{myTeamNumber === 2 ? 'Your Team' : 'Opponents'}</span
+			>
 			<div class="flex items-baseline gap-2">
 				<span class="text-3xl font-light text-text drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
 					>{team2Points}</span

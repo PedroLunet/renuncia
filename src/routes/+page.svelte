@@ -49,6 +49,12 @@
 	let gameOverData: any = $state(null);
 	let roundEnded = $state(false);
 
+	// 1 if local player is in global team 1 (playersList indices 0 & 2), else 2
+	let myTeamNumber = $derived(() => {
+		const idx = playersList.findIndex((p: any) => p.id === myPlayerId);
+		return idx % 2 === 0 ? 1 : 2;
+	});
+
 	let roomInput = $state('');
 	let currentRoomCode = $state('');
 	let isSoloMode = $state(false);
@@ -270,7 +276,7 @@
 				<div class="my-8 flex justify-around rounded-xl border border-neutral-800 bg-[#121212] p-6">
 					<div class="flex flex-col items-center">
 						<span class="mb-1 text-[10px] font-light tracking-[0.2em] text-neutral-500 uppercase"
-							>Team 1</span
+							>{myTeamNumber() === 1 ? 'Your Team' : 'Opponents'}</span
 						>
 						<span class="text-4xl font-light text-text">{gameOverData.t1}</span>
 						<span class="mt-1 text-[10px] font-light tracking-widest text-neutral-600 uppercase"
@@ -280,7 +286,7 @@
 					<div class="w-px bg-neutral-800"></div>
 					<div class="flex flex-col items-center">
 						<span class="mb-1 text-[10px] font-light tracking-[0.2em] text-neutral-500 uppercase"
-							>Team 2</span
+							>{myTeamNumber() === 2 ? 'Your Team' : 'Opponents'}</span
 						>
 						<span class="text-4xl font-light text-text">{gameOverData.t2}</span>
 						<span class="mt-1 text-[10px] font-light tracking-widest text-neutral-600 uppercase"
