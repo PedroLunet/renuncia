@@ -20,5 +20,6 @@
 
 @theme {
 	--color-text: #f5f1e9;
-  --font-sentient: 'Sentient', sans-serif;
+	--color-primary: #ff9b7a;
+	--font-sentient: 'Sentient', sans-serif;
 }
