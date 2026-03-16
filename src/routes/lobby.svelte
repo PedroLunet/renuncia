@@ -18,13 +18,9 @@
 	}
 </script>
 
-<div
-	class="w-full max-w-lg rounded-2xl border border-neutral-800 bg-[#121212] p-10 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
->
-	<h1
-		class="mb-10 text-center text-3xl font-light tracking-[0.3em] text-text uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-	>
-		Sueca
+<div class="w-full max-w-lg p-10">
+	<h1 class="mb-10 text-center font-sentient text-3xl font-thin tracking-wider text-text">
+		renúncia
 	</h1>
 
 	<div class="space-y-8">
