@@ -2,7 +2,7 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const buttonStyle = cva(
-		'font-family-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:duration-75',
+		'font-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:duration-75',
 		{
 			variants: {
 				variant: {
@@ -18,7 +18,7 @@
 					xs: 'rounded-lg px-6 py-2 text-[10px]',
 					sm: 'rounded-xl px-8 py-3 text-xs',
 					md: 'rounded-2xl px-12 py-4 text-sm',
-					lg: 'rounded-3xl px-14 py-6 text-base',
+					lg: 'rounded-3xl px-14 py-5 text-base',
 					icon: 'h-14 w-14 rounded-2xl p-0'
 				},
 				square: {
