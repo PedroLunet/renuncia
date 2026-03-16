@@ -8,14 +8,9 @@
 				variant: {
 					primary: 'bg-primary text-bg',
 					destructive:
-						'bg-[#2a0808] text-red-200 shadow-[inset_0_2px_3px_rgba(255,255,255,0.04),_inset_0_-3px_4px_rgba(0,0,0,0.6),_0_8px_0_0_#0d0101,_0_14px_20px_rgba(0,0,0,0.6)] hover:bg-[#380b0b] hover:text-red-100 hover:-translate-y-[1px] hover:shadow-[inset_0_2px_4px_rgba(255,255,255,0.06),_inset_0_-3px_4px_rgba(0,0,0,0.6),_0_9px_0_0_#0d0101,_0_18px_25px_rgba(0,0,0,0.8)] active:translate-y-[8px] active:shadow-[inset_0_1px_1px_rgba(255,255,255,0.02),_inset_0_-1px_2px_rgba(0,0,0,0.7),_0_0px_0_0_#0d0101,_0_0px_0px_rgba(0,0,0,0)] focus-visible:ring-red-500',
+						'inset_0_-1px_2px_rgba(0,0,0,0.7),_0_0px_0_0_#0d0101,_0_0px_0px_rgba(0,0,0,0)] focus-visible:ring-red-500',
 
-					secondary:
-						'bg-[#121212] text-neutral-400 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),_0_2px_0_0_#000] hover:-translate-y-[1px] hover:bg-[#1a1a1a] hover:text-neutral-200 hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1),_0_3px_0_0_#000] active:translate-y-[2px] active:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05),_0_0px_0_0_#000] focus-visible:ring-neutral-500',
-
-					outline:
-						'border border-neutral-800 bg-transparent text-neutral-400 hover:border-neutral-600 hover:bg-neutral-800/20 hover:text-neutral-200 active:translate-y-[1px] active:scale-[0.98] focus-visible:ring-neutral-500',
-
+					outline: 'border border-primary text-text',
 					ghost:
 						'bg-transparent text-neutral-500 hover:bg-neutral-800/30 hover:text-neutral-200 active:translate-y-[1px] active:scale-[0.98] focus-visible:ring-neutral-500'
 				},
@@ -56,7 +51,7 @@
 		loader,
 		class: className,
 		variant = 'primary',
-		size = 'md',
+		size = 'lg',
 		square = false,
 		isLoading = false,
 		type = 'button',
