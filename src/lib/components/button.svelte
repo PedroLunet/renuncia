@@ -8,7 +8,7 @@
 				variant: {
 					primary: 'bg-primary text-bg',
 					destructive:
-						'inset_0_-1px_2px_rgba(0,0,0,0.7),_0_0px_0_0_#0d0101,_0_0px_0px_rgba(0,0,0,0)] focus-visible:ring-red-500',
+						'bg-red-700 hover:ring-red-700/60 focus-visible:ring-red-700/60',
 
 					outline: 'border border-primary text-text',
 					ghost:
