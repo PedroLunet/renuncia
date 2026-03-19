@@ -7,12 +7,11 @@
 			variants: {
 				variant: {
 					primary: 'bg-primary text-bg',
-					destructive:
-						'bg-red-700 hover:ring-red-700/60 focus-visible:ring-red-700/60',
+					destructive: 'bg-red-700 hover:ring-red-700/60 focus-visible:ring-red-700/60',
 
 					outline: 'border border-primary text-text',
 					ghost:
-						'bg-transparent text-neutral-500 hover:bg-neutral-800/30 hover:text-neutral-200 active:translate-y-[1px] active:scale-[0.98] focus-visible:ring-neutral-500'
+						'bg-transparent text-neutral-500 hover:bg-neutral-800/30 hover:text-neutral-200 hover:ring-transparent focus-visible:ring-neutral-500/50'
 				},
 				size: {
 					xs: 'rounded-lg px-6 py-2',
