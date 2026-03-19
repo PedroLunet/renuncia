@@ -2,7 +2,7 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const buttonStyle = cva(
-		'font-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:duration-75',
+		'font-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-300 ease-in-out ring-3 ring-transparent ring-offset-transparent hover:ring-primary/50 hover:ring-offset-[#0c0c0c] focus-visible:outline-none focus-visible:ring-primary/50 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
 		{
 			variants: {
 				variant: {
@@ -15,10 +15,10 @@
 						'bg-transparent text-neutral-500 hover:bg-neutral-800/30 hover:text-neutral-200 active:translate-y-[1px] active:scale-[0.98] focus-visible:ring-neutral-500'
 				},
 				size: {
-					xs: 'rounded-lg px-6 py-2 text-[10px]',
-					sm: 'rounded-xl px-8 py-3 text-xs',
-					md: 'rounded-2xl px-12 py-4 text-sm',
-					lg: 'rounded-3xl px-14 py-5 text-base',
+					xs: 'rounded-lg px-6 py-2',
+					sm: 'rounded-xl px-8 py-3',
+					md: 'rounded-3xl px-12 py-4 text-xl font-light',
+					lg: 'rounded-3xl h-17.5 px-14 text-2xl font-extralight',
 					icon: 'h-14 w-14 rounded-2xl p-0'
 				},
 				square: {
