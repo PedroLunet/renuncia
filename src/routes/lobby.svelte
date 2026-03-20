@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Button from '$lib/components/button.svelte';
+
 	let {
 		localPlayerId,
 		openRooms,
@@ -19,32 +21,36 @@
 </script>
 
 <div class="w-full max-w-lg p-10">
-	<h1 class="mb-10 text-center font-sentient text-3xl font-thin tracking-wider text-text">
+	<h1 class="font-regular mb-10 text-center font-sentient text-3xl tracking-wider text-primary">
 		renúncia
 	</h1>
 
 	<div class="space-y-8">
 		<div class="space-y-3">
-			<button
+			<Button
+				variant="outline"
+				class="w-full lowercase"
 				onclick={() => connectToTable(`SOLO_${generateRoomCode()}`, true, false)}
-				class="w-full rounded-xl border border-neutral-700 bg-neutral-900 py-4 text-xs font-light tracking-[0.2em] text-text uppercase transition-all duration-300 hover:border-neutral-500 hover:bg-neutral-800 hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]"
 			>
 				Play Solo
-			</button>
+			</Button>
 
-			<div class="flex gap-3">
-				<button
+			<div class="flex w-full gap-2">
+				<Button
+					size="md"
+					class="flex-1 lowercase"
 					onclick={() => connectToTable(generateRoomCode(), false, false)}
-					class="flex-1 rounded-xl bg-neutral-800 py-4 text-xs font-light tracking-[0.2em] text-text uppercase transition-all duration-300 hover:bg-neutral-700"
 				>
 					Public Room
-				</button>
-				<button
+				</Button>
+				<Button
+					size="md"
+					variant="outline"
+					class="flex-1 text-xl font-extralight lowercase"
 					onclick={() => connectToTable(generateRoomCode(), false, true)}
-					class="flex-1 rounded-xl border border-neutral-800 bg-transparent py-4 text-xs font-light tracking-[0.2em] text-neutral-500 uppercase transition-all duration-300 hover:border-neutral-600 hover:text-text"
 				>
 					Private Room
-				</button>
+				</Button>
 			</div>
 		</div>
 
@@ -87,13 +93,14 @@
 									{room.status === 'playing' ? 'In Progress' : 'Waiting'} • {room.playerCount}/4
 								</div>
 							</div>
-							<button
+							<Button
+								variant="primary"
+								size="lg"
 								onclick={() => connectToTable(room.code, false, false)}
 								disabled={room.playerCount >= 4 || room.status === 'playing'}
-								class="rounded-full border border-neutral-700 px-6 py-2 text-[10px] font-medium tracking-[0.2em] text-text uppercase transition-all hover:bg-text hover:text-black disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text"
 							>
 								Join
-							</button>
+							</Button>
 						</div>
 					{/each}
 				{/if}
@@ -108,13 +115,14 @@
 				maxlength="4"
 				class="w-full rounded-xl border border-neutral-800 bg-[#0c0c0c] px-4 py-4 text-center font-mono text-xl font-light tracking-widest text-text uppercase placeholder-neutral-800 focus:border-neutral-600 focus:ring-0 focus:outline-none"
 			/>
-			<button
+			<Button
+				variant="primary"
+				size="md"
 				onclick={() => connectToTable(roomInput, false, false)}
 				disabled={roomInput.length < 4}
-				class="rounded-xl bg-neutral-200 px-8 text-xs font-medium tracking-[0.2em] text-black uppercase transition-all duration-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"
 			>
 				Join
-			</button>
+			</Button>
 		</div>
 	</div>
 </div>
