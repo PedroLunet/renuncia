@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from '$lib/components/button.svelte';
+	import TextInput from '$lib/components/textInput.svelte';
 
 	let {
 		localPlayerId,
@@ -108,16 +109,18 @@
 		</div>
 
 		<div class="flex gap-2">
-			<input
+			<TextInput
+				size="md"
 				type="text"
 				bind:value={roomInput}
 				placeholder="CODE"
 				maxlength="4"
-				class="w-full rounded-xl border border-neutral-800 bg-[#0c0c0c] px-4 py-4 text-center font-mono text-xl font-light tracking-widest text-text uppercase placeholder-neutral-800 focus:border-neutral-600 focus:ring-0 focus:outline-none"
+				class="w-full"
 			/>
 			<Button
 				variant="primary"
 				size="md"
+        class="lowercase"
 				onclick={() => connectToTable(roomInput, false, false)}
 				disabled={roomInput.length < 4}
 			>
