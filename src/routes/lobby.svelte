@@ -95,10 +95,11 @@
 								</div>
 							</div>
 							<Button
-								variant="primary"
-								size="lg"
+								variant="outline"
+								size="sm"
 								onclick={() => connectToTable(room.code, false, false)}
 								disabled={room.playerCount >= 4 || room.status === 'playing'}
+								class="lowercase"
 							>
 								Join
 							</Button>
@@ -120,7 +121,7 @@
 			<Button
 				variant="primary"
 				size="md"
-        class="lowercase"
+				class="lowercase"
 				onclick={() => connectToTable(roomInput, false, false)}
 				disabled={roomInput.length < 4}
 			>
