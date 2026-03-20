@@ -55,7 +55,7 @@
 			</div>
 		</div>
 
-		<div class="rounded-xl border border-neutral-800/60 bg-[#0c0c0c] p-6">
+		<div class="rounded-xl border border-neutral-800/60 bg-bg p-6">
 			<div class="mb-4 flex items-center justify-between border-b border-neutral-800/50 pb-4">
 				<h2 class="text-[10px] font-light tracking-[0.2em] text-neutral-500 uppercase">
 					Open Rooms
@@ -118,7 +118,7 @@
 				bind:value={roomInput}
 				placeholder="CODE"
 				maxlength="4"
-				class="w-full"
+				class="w-full uppercase"
 			/>
 			<Button
 				variant="primary"

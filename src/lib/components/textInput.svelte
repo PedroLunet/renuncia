@@ -2,16 +2,16 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const inputStyle = cva(
-		'font-switzer flex w-full transition-all duration-150 ease-in-out focus-visible:outline-none ring-3 ring-transparent ring-offset-transparent focus-visible:ring-primary/50 focus-visible:ring-offset-[#0c0c0c] disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-neutral-700',
+		'font-switzer flex w-full transition-all duration-150 ease-in-out focus-visible:outline-none ring-3 ring-transparent ring-offset-transparent focus-visible:ring-primary/50 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-neutral-700',
 		{
 			variants: {
 				variant: {
 					default:
-						'border border-neutral-800 bg-[#0c0c0c] text-text hover:border-neutral-600 focus-visible:border-primary',
+						'border border-neutral-800 bg-bg text-text hover:border-neutral-600 focus-visible:border-primary',
 					filled:
-						'border border-transparent bg-neutral-900 text-text hover:bg-neutral-800 focus-visible:border-primary focus-visible:bg-[#0c0c0c]',
+						'border border-transparent bg-neutral-900 text-text hover:bg-neutral-800 focus-visible:border-primary focus-visible:bg-bg',
 					error:
-						'border border-red-900 bg-[#0c0c0c] text-red-500 placeholder:text-red-900/50 hover:border-red-700 focus-visible:border-red-500 focus-visible:ring-red-500/50',
+						'border border-red-900 bg-bg text-red-500 placeholder:text-red-900/50 hover:border-red-700 focus-visible:border-red-500 focus-visible:ring-red-500/50',
 					ghost:
 						'border border-transparent bg-transparent text-text hover:bg-neutral-900/30 focus-visible:bg-neutral-900/30'
 				},
