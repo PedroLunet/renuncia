@@ -60,12 +60,14 @@
 				<h2 class="text-[10px] font-light tracking-[0.2em] text-neutral-500 uppercase">
 					Open Rooms
 				</h2>
-				<button
+				<Button
+					variant="ghost"
+					size="xs"
 					onclick={fetchRooms}
 					class="text-[10px] font-light tracking-[0.2em] text-neutral-500 uppercase transition-colors hover:text-text"
 				>
 					Refresh
-				</button>
+				</Button>
 			</div>
 
 			<div class="custom-scrollbar max-h-48 space-y-1 overflow-y-auto pr-2">
@@ -96,7 +98,7 @@
 							</div>
 							<Button
 								variant="outline"
-								size="sm"
+								size="xs"
 								onclick={() => connectToTable(room.code, false, false)}
 								disabled={room.playerCount >= 4 || room.status === 'playing'}
 								class="lowercase"
