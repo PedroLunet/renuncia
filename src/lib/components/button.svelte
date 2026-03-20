@@ -2,7 +2,7 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const buttonStyle = cva(
-		'font-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-300 ease-in-out ring-3 ring-transparent ring-offset-transparent hover:ring-primary/50 hover:ring-offset-[#0c0c0c] focus-visible:outline-none focus-visible:ring-primary/50 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+		'font-switzer group relative inline-flex items-center justify-center gap-2 whitespace-nowrap select-none transition-all duration-150 ease-in-out ring-3 ring-transparent ring-offset-transparent hover:ring-primary/50 hover:ring-offset-[#0c0c0c] focus-visible:outline-none focus-visible:ring-primary/50 focus-visible:ring-offset-[#0c0c0c] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
 		{
 			variants: {
 				variant: {
@@ -14,8 +14,8 @@
 						'bg-transparent text-neutral-500 hover:bg-neutral-800/30 hover:text-neutral-200 hover:ring-transparent focus-visible:ring-neutral-500/50'
 				},
 				size: {
-					xs: 'rounded-lg px-6 py-2',
-					sm: 'rounded-xl px-8 py-3',
+					xs: 'rounded-xl px-6 py-2',
+					sm: 'rounded-2xl px-8 py-3',
 					md: 'rounded-3xl px-12 py-4 text-xl font-light',
 					lg: 'rounded-3xl h-17.5 px-14 text-2xl font-extralight',
 					icon: 'h-14 w-14 rounded-2xl p-0'
@@ -74,7 +74,7 @@
 	<a {href} class={cn(buttonStyle({ variant, size, square }), className)} {...restProps}>
 		<span
 			class={cn(
-				'inline-flex items-center gap-2 transition-opacity duration-300',
+				'inline-flex items-center gap-2 transition-opacity duration-150',
 				isLoading ? 'opacity-0' : 'opacity-100'
 			)}
 		>
@@ -83,7 +83,7 @@
 
 		{#if isLoading && loader}
 			<span
-				class="animate-in fade-in absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 duration-300"
+				class="animate-in fade-in absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 duration-150"
 			>
 				{@render loader()}
 			</span>
@@ -98,7 +98,7 @@
 	>
 		<span
 			class={cn(
-				'inline-flex items-center gap-2 transition-opacity duration-300',
+				'inline-flex items-center gap-2 transition-opacity duration-150',
 				isLoading ? 'opacity-0' : 'opacity-100'
 			)}
 		>
@@ -107,7 +107,7 @@
 
 		{#if isLoading && loader}
 			<span
-				class="animate-in fade-in absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 duration-300"
+				class="animate-in fade-in absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 duration-150"
 			>
 				{@render loader()}
 			</span>
