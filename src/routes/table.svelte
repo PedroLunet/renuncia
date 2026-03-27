@@ -465,7 +465,7 @@
 </script>
 
 <div
-	class="absolute inset-0 flex flex-col justify-between overflow-hidden bg-[#0c0c0c] font-sans text-neutral-300"
+	class="absolute inset-0 flex flex-col justify-between overflow-hidden bg-bg font-sans text-neutral-300"
 >
 	<div class="absolute top-8 left-8 z-20 flex gap-12">
 		<div class="flex flex-col">
@@ -616,7 +616,7 @@
 			{#if !gameStarted && !roundEnded}
 				<div class="absolute inset-0 z-50 flex items-center justify-center">
 					<div
-						class="w-full min-w-[320px] rounded-xl border border-neutral-800 bg-[#0c0c0c]/95 p-6 text-center shadow-2xl backdrop-blur-md"
+						class="w-full min-w-[320px] rounded-xl border border-neutral-800 bg-bg/95 p-6 text-center shadow-2xl backdrop-blur-md"
 					>
 						<h1 class="mb-1 text-[10px] font-light tracking-[0.3em] text-neutral-500 uppercase">
 							{#if ownerId === myPlayerId}Host{:else}Waiting{/if}

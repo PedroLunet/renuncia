@@ -190,7 +190,7 @@
 </script>
 
 <main
-	class="flex min-h-screen flex-col items-center justify-center bg-[#0c0c0c] p-4 font-sans text-text selection:bg-neutral-500"
+	class="flex min-h-screen flex-col items-center justify-center bg-bg p-4 font-sans text-text selection:bg-neutral-500"
 >
 	<div class="pointer-events-none fixed top-6 left-1/2 z-50 -translate-x-1/2">
 		{#each toasts as toast, i (toast.id)}
@@ -268,7 +268,7 @@
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
 		>
 			<div
-				class="w-full max-w-md rounded-2xl border border-neutral-800 bg-[#0c0c0c] p-8 text-center shadow-2xl"
+				class="w-full max-w-md rounded-2xl border border-neutral-800 bg-bg p-8 text-center shadow-2xl"
 			>
 				<p class="mb-1 text-[10px] font-light tracking-[0.3em] text-neutral-500 uppercase">
 					Round Over

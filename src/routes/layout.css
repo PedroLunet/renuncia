@@ -2,6 +2,42 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+@font-face {
+	font-family: 'Sentient';
+	src: url('/fonts/Sentient-Variable.ttf') format('truetype');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Sentient';
+	src: url('/fonts/Sentient-VariableItalic.ttf') format('truetype');
+	font-weight: 100 900;
+	font-style: italic;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Switzer';
+	src: url('/fonts/Switzer-Variable.ttf') format('truetype');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Switzer';
+	src: url('/fonts/Switzer-VariableItalic.ttf') format('truetype');
+	font-weight: 100 900;
+	font-style: italic;
+	font-display: swap;
+}
+
 @theme {
 	--color-text: #f5f1e9;
+	--color-primary: #ff9b7a;
+  --color-bg: #0c0c0c; 
+	--font-sentient: 'Sentient', sans-serif;
+  --font-switzer: 'Switzer', sans-serif;
 }
